@@ -4,8 +4,6 @@ def D_phi(tx, flow):
     func = lambda tx: flow(tx)
     return torch.func.jacrev(func)(tx)
 
-
-
 def PDE(tx, flow, vel):
 
     loss = torch.nn.L1Loss()
