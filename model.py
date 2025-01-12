@@ -52,7 +52,7 @@ class Initialize:
         net.initialize(self.Vel)
         
         likelihood = gpytorch.likelihoods.GaussianLikelihood()
-        x = None
+        tx = None
         y = None
         
-        self.GP = GP(x, y, likelihood)
+        self.GP = GP(tx, y, Flow, Vel, likelihood)
