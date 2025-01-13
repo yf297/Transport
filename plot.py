@@ -55,3 +55,46 @@ def obs(data, proj):
     plt.close(fig)
 
     return HTML(ani.to_jshtml())
+
+
+def winds(data, U, V, proj):
+
+    latN = 50.4
+    latS = 23
+    lonW = -123
+    lonE = -73
+    res = '50m'
+
+    fig = plt.figure(figsize=(9, 6))
+    ax = fig.add_subplot(1, 1, 1, projection=proj)
+
+    ax.set_extent([lonW, lonE, latS, latN], crs=ccrs.Geodetic())
+
+    ax.add_feature(cfeature.COASTLINE.with_scale(res))
+    ax.add_feature(cfeature.STATES.with_scale(res))
+    ax.stock_img()
+
+    step = 1
+
+    Q = ax.quiver(
+        data.X[::step, ::step],
+        data.Y[::step, ::step],
+        U[0, ::step, ::step],
+        V[0, ::step, ::step],
+        transform=proj)
+
+
+    def update_quiver(frame):
+        Q.set_UVC(U[frame, ::step, ::step], V[frame, ::step, ::step])
+        ax.set_title(f"Wind Velocities at Hour {frame+1}")
+        return Q,
+
+    ani = animation.FuncAnimation(
+        fig,
+        update_quiver,
+        frames=U.shape[0]
+    )
+
+    plt.close(fig)
+
+    return HTML(ani.to_jshtml())
