@@ -53,9 +53,9 @@ class Flow(nn.Module):
         return x + t * out
 
 
-class Vel(nn.Module):
+class Vector_Field(nn.Module):
     def __init__(self, L=1, h=48, d=2):
-        super(Vel, self).__init__()
+        super(Vector_Field, self).__init__()
                 
         self.hidden_weights = nn.ParameterList()
         self.hidden_biases = nn.ParameterList()
@@ -98,9 +98,9 @@ class Vel(nn.Module):
 
 
 
-class Mean(nn.Module):
+class Scalar_Field(nn.Module):
     def __init__(self, L=1, h=48, d=2):
-        super(Mean, self).__init__()
+        super(Scalar_Field, self).__init__()
                 
         self.hidden_weights = nn.ParameterList()
         self.hidden_biases = nn.ParameterList()
