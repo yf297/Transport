@@ -1,7 +1,7 @@
 import torch
 
 def time(n):
-    return torch.linspace(0, n, n + 1)
+    return torch.linspace(0, n, n + 1)/23
 
 def space_time(t,x):
     n = t.shape[0] - 1
