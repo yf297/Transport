@@ -21,10 +21,9 @@ def obs(data, proj):
     ax.add_feature(cfeature.COASTLINE.with_scale(res))
     ax.add_feature(cfeature.STATES.with_scale(res))
 
-
-    contour = ax.contourf(
-        data.X,
-        data.Y,
+    contour = ax.pcolormesh(
+        data.x,
+        data.y,
         data.obs[0, :, :],
         cmap="coolwarm")
 
@@ -34,13 +33,13 @@ def obs(data, proj):
     def update_contour(frame):
         nonlocal contour 
         contour.remove()
-        contour = ax.contourf(
-            data.X,
-            data.Y,
+        contour = ax.pcolormesh(
+            data.x,
+            data.y,
             data.obs[frame, :, :],
-            cmap="coolwarm",
-            levels=20
-        )
+            cmap="coolwarm"
+            )
+        
         ax.set_title(f"Dew Point Temperature at Hour {frame}", fontsize=14)
         return contour
 
@@ -48,7 +47,7 @@ def obs(data, proj):
         fig,
         update_contour,
         frames=data.time.shape[0],  
-        interval=200,         
+        interval=100,         
         blit=False
     )
 
@@ -73,12 +72,14 @@ def winds(data, U, V, proj):
     ax.add_feature(cfeature.COASTLINE.with_scale(res))
     ax.add_feature(cfeature.STATES.with_scale(res))
     ax.stock_img()
+    ax.gridlines(
+    draw_labels=True)
 
     step = 1
 
     Q = ax.quiver(
-        data.X[::step, ::step],
-        data.Y[::step, ::step],
+        data.x[::step],
+        data.y[::step],
         U[0, ::step, ::step],
         V[0, ::step, ::step],
         transform=proj)
