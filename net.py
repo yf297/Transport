@@ -29,8 +29,6 @@ class ResidualBlock(nn.Module):
         x = self.ln2(x)
         return self.activation(x + residual)
 
-
-
                 
 class Flow(nn.Module):
     def __init__(self, d=2, L=1, h=32):
@@ -43,30 +41,25 @@ class Flow(nn.Module):
         
         self.network = nn.Sequential(*layers)
                 
-
     def forward(self, txy):
         xy = txy[...,1:]
         t = txy[...,0:1]
         return xy + t*self.network(txy)
-    
     
 
 class Mean(nn.Module):
     def __init__(self, d=2, L=1, h=32):
         super(Mean, self).__init__()
         
-        layers = [nn.Linear(d, h) , nn.GELU()]   
+        layers = [nn.Linear(d, h), nn.Mish()]
         for _ in range(L - 1):
-            layers += [nn.Linear(h, h) , nn.GELU()]
-        layers.append( nn.Linear(h, 1) )
+            layers.append(ResidualBlock(h))
+        layers.append(nn.Linear(h, d))
+        
         self.network = nn.Sequential(*layers)
-        
-        for module in self.network.modules():
-            if isinstance(module, nn.Linear):
-                 nn.init.xavier_uniform_(module.weight,gain = nn.init.calculate_gain("relu"))
-        
+                
     def forward(self, a):
-        return self.network(a).squeeze()
+        return self.network(a)
     
 
 
