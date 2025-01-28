@@ -9,7 +9,7 @@ def flow(model, num_epochs=75):
         model.TXY = model.TXY.cuda()
         model.Z = model.Z.cuda()
         model.gp = model.gp.cuda()
-        model.likelihood = model.likelilhood.cuda()
+        model.likelihood = model.likelihood.cuda()
 
     optimizer_mean = torch.optim.Adam([
         {'params': model.gp.Mean.parameters(), 'lr': 0.001}
@@ -81,13 +81,18 @@ def flow(model, num_epochs=75):
                 model.TXY = model.TXY.cpu()
                 model.Z = model.Z.cpu()
                 model.gp = model.gp.cpu()
-                model.likelihood = model.likelilhood.cpu()
+                model.likelihood = model.likelihood.cpu()
+                gc.collect()
+                torch.cuda.empty_cache()
             break
         
     if torch.cuda.is_available():   
         model.TXY = model.TXY.cpu()
         model.Z = model.Z.cpu()
         model.gp = model.gp.cpu()
-        model.likelihood = model.likelilhood.cpu()
+        model.likelihood = model.likelihood.cpu()
+        gc.collect()
+        torch.cuda.empty_cache()
+
 
         
