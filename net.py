@@ -58,7 +58,7 @@ class Mean(nn.Module):
         self.network = nn.Sequential(*layers)
                 
     def forward(self, a):
-        return self.network(a)
+        return self.network(a).squeeze()
     
 
 
