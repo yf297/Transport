@@ -4,12 +4,12 @@ import gpytorch
 import gc 
 
 def flow(model, num_epochs=75):
-    # Move model and data to GPU if available
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.TXY = model.TXY.to(device)
-    model.Z = model.Z.to(device)
-    model.gp = model.gp.to(device)
-    model.flow = model.flow.to(device)
+    
+    if torch.cuda.is_available():
+        model.TXY = model.TXY.cuda()
+        model.Z = model.Z.cuda()
+        model.gp = model.gp.cuda()
+        model.likelihood = model.likelilhood.cuda()
 
     optimizer_mean = torch.optim.Adam([
         {'params': model.gp.Mean.parameters(), 'lr': 0.001}
@@ -48,7 +48,7 @@ def flow(model, num_epochs=75):
         min_lr=1e-5
     )
 
-    mll = gpytorch.mlls.ExactMarginalLogLikelihood(model.gp.likelihood, model.gp)
+    mll = gpytorch.mlls.ExactMarginalLogLikelihood(model.likelihood, model.gp)
 
 
     for epoch in range(1, num_epochs+1):
@@ -77,16 +77,17 @@ def flow(model, num_epochs=75):
             print(f"Epoch: {epoch} - Likelihood: {ll.item():.3f} - Learning Rates: {current_lrs}")
 
         if 1e-5 in current_lrs:
-            model.TXY = model.TXY.cpu()
-            model.Z = model.Z.cpu()
-            model.gp = model.gp.cpu()
-            model.flow = model.flow.cpu()
+            if torch.cuda.is_available():
+                model.TXY = model.TXY.cpu()
+                model.Z = model.Z.cpu()
+                model.gp = model.gp.cpu()
+                model.likelihood = model.likelilhood.cpu()
             break
-
+        
+    if torch.cuda.is_available():   
         model.TXY = model.TXY.cpu()
         model.Z = model.Z.cpu()
         model.gp = model.gp.cpu()
-        model.flow = model.flow.cpu()
-        gc.collect()
-        torch.cuda.empty_cache()
+        model.likelihood = model.likelilhood.cpu()
+
         
