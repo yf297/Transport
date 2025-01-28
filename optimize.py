@@ -1,23 +1,39 @@
 import torch
 import penalty
 import gpytorch
+import gc 
 
-def flow(spacetime, z, model, num_epochs=75):
-        
-    optimizer_net = torch.optim.Adam([
-        {'params': model.flow.parameters(),'lr': 0.001},
-        {'params': model.gp.Mean.parameters(),'lr': 0.001}])
+def flow(model, num_epochs=75):
+    # Move model and data to GPU if available
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.TXY = model.TXY.to(device)
+    model.Z = model.Z.to(device)
+    model.gp = model.gp.to(device)
+    model.flow = model.flow.to(device)
+
+    optimizer_mean = torch.optim.Adam([
+        {'params': model.gp.Mean.parameters(), 'lr': 0.001}
+    ])
     
-    optimizer_vel = torch.optim.AdamW([
-       {'params': model.vel.parameters(),'lr': 0.01, "weight_decay": 0.01}])
+    optimizer_flow = torch.optim.Adam([
+        {'params': model.flow.parameters(), 'lr': 0.001}
+    ])
    
-    optimizer_cov = torch.optim.Adam([            
+    optimizer_cov = torch.optim.Adam([
         {'params': model.gp.Kernel.parameters(), 'lr': 0.1},
         {'params': model.gp.likelihood.parameters(), 'lr': 0.1}
     ])
     
-    scheduler_net = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer_net, 
+    scheduler_mean = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer_mean, 
+        mode='min', 
+        factor=0.1, 
+        patience=1, 
+        min_lr=1e-5
+    )
+    
+    scheduler_flow = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer_flow, 
         mode='min', 
         factor=0.1, 
         patience=1, 
@@ -25,7 +41,7 @@ def flow(spacetime, z, model, num_epochs=75):
     )
     
     scheduler_cov = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer_net, 
+        optimizer_cov, 
         mode='min', 
         factor=0.1, 
         patience=1, 
@@ -34,29 +50,43 @@ def flow(spacetime, z, model, num_epochs=75):
 
     mll = gpytorch.mlls.ExactMarginalLogLikelihood(model.gp.likelihood, model.gp)
 
+
     for epoch in range(1, num_epochs+1):
         
-        optimizer_net.zero_grad()
+        optimizer_mean.zero_grad()
         optimizer_cov.zero_grad()
-        optimizer_vel.zero_grad()
+        optimizer_flow.zero_grad()
         
-        output = model.gp(spacetime)
-        ll = -mll(output, z) 
-                       
-        loss = ll + 0.01*penalty.PDE(spacetime, model.flow, model.vel)
+        output = model.gp(model.TXY)
+        ll = -mll(output, model.Z) 
+                        
+        loss = ll
         loss.backward()
 
-        optimizer_net.step()
+        optimizer_mean.step()
         optimizer_cov.step()
-        optimizer_vel.step()
+        optimizer_flow.step()
         
-        scheduler_net.step(ll)
+        scheduler_mean.step(ll)
+        scheduler_flow.step(ll)
         scheduler_cov.step(ll)
         
-        current_lrs = [round(group['lr'], 6) for group in optimizer_net.param_groups]
+        current_lrs = [round(group['lr'], 6) for group in optimizer_flow.param_groups]
 
         if epoch % 5 == 0:
             print(f"Epoch: {epoch} - Likelihood: {ll.item():.3f} - Learning Rates: {current_lrs}")
 
         if 1e-5 in current_lrs:
+            model.TXY = model.TXY.cpu()
+            model.Z = model.Z.cpu()
+            model.gp = model.gp.cpu()
+            model.flow = model.flow.cpu()
             break
+
+        model.TXY = model.TXY.cpu()
+        model.Z = model.Z.cpu()
+        model.gp = model.gp.cpu()
+        model.flow = model.flow.cpu()
+        gc.collect()
+        torch.cuda.empty_cache()
+        
