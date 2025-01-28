@@ -1,5 +1,4 @@
 import torch.nn as nn
-import torch
 
 
 class ResidualBlock(nn.Module):
@@ -54,7 +53,7 @@ class Mean(nn.Module):
         layers = [nn.Linear(d, h), nn.Mish()]
         for _ in range(L - 1):
             layers.append(ResidualBlock(h))
-        layers.append(nn.Linear(h, d))
+        layers.append(nn.Linear(h, 1))
         
         self.network = nn.Sequential(*layers)
                 
