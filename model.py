@@ -7,10 +7,10 @@ class GP(gpytorch.models.ExactGP):
     def __init__(self, TXY, Z, flow, likelihood):
         super(GP, self).__init__(TXY, Z, likelihood)
         self.flow = flow
-        self.Mean = net.Mean(L = 4)
+        self.Mean = net.Mean(L = 6)
         self.Kernel = gpytorch.kernels.ScaleKernel(
                       gpytorch.kernels.MaternKernel(
-                      nu = 1/2, ard_num_dims = 2))
+                      nu = 5/2, ard_num_dims = 2))
         
     def forward(self, TXY):
         points = self.flow(TXY)
@@ -25,7 +25,6 @@ class GP_FLOW:
         self.Z = Z
         
         self.flow = flow
-        
         self.likelihood = gpytorch.likelihoods.GaussianLikelihood()
         
         self.gp = GP(self.TXY, self.Z, self.flow, self.likelihood)
