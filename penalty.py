@@ -15,10 +15,10 @@ def v_hat(TXY, flow):
 
 def PDE(TXY, flow, vel):
 
-    loss = torch.nn.L1Loss(reduction="mean")
-    
-    v =  torch.vmap(vel)(TXY)
-    D =  torch.vmap(D_phi, in_dims=(0, None))(TXY, flow)
+    loss = torch.nn.L1Loss(reduction="mean").to(TXY.device) 
+
+    v = vel(TXY)
+    D = D_phi(TXY, flow)
     
     Dt = D[:, :, 0]
     Dx = D[:, :, 1:]
