@@ -20,7 +20,7 @@ def gp(data, num_epochs=75):
     gp.train()
     optimizer = torch.optim.Adam([
         {'params': gp.kernel.parameters(), 'lr': 0.1},
-        {'params': gp.mean.parameters(), 'lr': 0.1},
+        {'params': gp.mean.parameters(), 'lr': 0.01},
         {'params': gp.likelihood.parameters(), 'lr': 0.1},
     ])
 
@@ -49,8 +49,9 @@ def gp(data, num_epochs=75):
 
     if torch.cuda.is_available():
         data.gp = gp.cpu()
-    
-
+        
+        
+  
 def fl_vecchia(data, num_epochs=100):
     gp = data.gp
     flow = data.flow
@@ -72,7 +73,7 @@ def fl_vecchia(data, num_epochs=100):
         gp = gp.cuda()
         
     optimizer = torch.optim.AdamW([
-        {'params': flow.parameters(), 'lr':  1e-2, "weight_decay":1e-1},
+        {'params': flow.parameters(), 'lr':  1e-2, "weight_decay":1},
         {'params': gp.kernel.base_kernel.parameters(), 'lr': 0.1},
         ])
         
@@ -124,3 +125,4 @@ def fl_vecchia(data, num_epochs=100):
     if torch.cuda.is_available():
         data.gp = gp.cpu()
         data.flow = flow.cpu()
+        

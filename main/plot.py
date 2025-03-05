@@ -46,7 +46,7 @@ def observations(XY, Z, extent = None, frame=0):
         return fig
 
 
-def velocities(XY_UV, extent, frame = 0):
+def velocities(XY_UV, extent, frame = 0, color = "red"):
     if extent is not None:
         
         lonW = extent[0]
@@ -68,7 +68,7 @@ def velocities(XY_UV, extent, frame = 0):
         Y0 = XY_UV[frame][:, 1]
         U0 = XY_UV[frame][:, 2]
         V0 = XY_UV[frame][:, 3]
-        ax.quiver(X0, Y0, U0, V0, color="red", angles='xy', scale_units='xy')
+        ax.quiver(X0, Y0, U0, V0, angles='xy', scale_units='xy', color = color)
         
         return fig    
     else:
@@ -80,6 +80,6 @@ def velocities(XY_UV, extent, frame = 0):
         Y0 = XY_UV[frame][:, 1]
         U0 = XY_UV[frame][:, 2]
         V0 = XY_UV[frame][:, 3]
-        ax.quiver(X0, Y0, U0, V0, color="red", angles='xy', scale_units='xy')
+        ax.quiver(X0, Y0, U0, V0, angles='xy', scale_units='xy')
         
         return fig

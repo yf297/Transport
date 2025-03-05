@@ -1,15 +1,14 @@
 import torch
 import torch.nn as nn
-
-
+    
 class Flow(nn.Module):
-    def __init__(self, d=2, L=1, w=32):
+    def __init__(self, d=2, L=1, w=48):
         super(Flow, self).__init__()
               
-        layers = [nn.Linear(d + 1, w, bias = False), nn.Tanh()]
+        layers = [nn.Linear(d + 1, w), nn.Tanh()]
         for _ in range(L - 1):
             layers += [nn.Linear(w, w), nn.Tanh()]
-        final_layer = nn.Linear(w, d, bias  = False)
+        final_layer = nn.Linear(w, d)
         layers.append(final_layer)
         self.net = nn.Sequential(*layers)
         

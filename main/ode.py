@@ -32,34 +32,3 @@ def Vel_hat(data):
         v = torch.linalg.solve(Dx,-1*Dt).squeeze()
         return v
     return vel_func
-
-'''def Vel_hat(flow_hat, data):
-    XY = data.XY[data.indices,:]
-    mean = XY.mean(dim=-2, keepdim=True)
-    std = std =  XY.view(-1).std() + 1e-6
-    
-    def vel_func(t,xy):
-        xy = (xy - mean)/std
-        txy = torch.cat([t.repeat(xy.shape[0],1),
-                        xy], dim = -1)
-        return flow_hat.net(txy)
-    return vel_func
-
-def discretization(T, k):
-    n = T.shape[0]
-    if k < n:
-        S = T
-    else:
-        points_per_interval = max( k // (n - 1), 1)
-        equispaced_points = []
-        for i in range(n - 1):
-            interval_points = torch.linspace(
-            T[i].item(), 
-            T[i + 1].item(), 
-            points_per_interval + 1 
-            )
-            if i < n - 2:  
-                interval_points = interval_points[:-1]
-            equispaced_points.append(interval_points)
-        S = torch.cat(equispaced_points)
-    return S'''

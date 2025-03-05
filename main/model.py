@@ -51,14 +51,14 @@ class data():
     
     
     
-    def plot_vel_data(self, indices, frame = 0):
+    def plot_vel_data(self, indices, frame = 0, color = "red"):
         T_ = self.T
         XY_UV_ = self.XY_UV
         XY_UV =  [XY_UV_[i][indices,:] for i in range(0,T_.shape[0])]
-        return plot.velocities(XY_UV, self.extent, frame)
+        return plot.velocities(XY_UV, self.extent, frame, color)
     
     
-    def plot_vel(self, indices, frame = 0):
+    def plot_vel(self, indices, frame = 0, color = "red"):
         T_ = self.T
         XY_ = self.XY
         
@@ -73,5 +73,5 @@ class data():
                             UV[i,:,0:1],
                             UV[i,:,1:2]],
                 dim = -1).detach() for i in range(0,T_.shape[0])]
-        return plot.velocities(XY_UV, self.extent, frame)
+        return plot.velocities(XY_UV, self.extent, frame, color)
        
