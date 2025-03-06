@@ -7,6 +7,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import pickle
 import gpytorch
+import torch
 from main import model, optimize, net, tools
 
 sat = "hrrr"
@@ -27,7 +28,7 @@ new_datas = [data for data in datas_pre if data.date not in fitted_dates]
 if not new_datas:
     print("No new data to fit.")
 else:
-    indices = tools.point_sampling(datas_pre[0].XY, min_dist=15000, max_samples=1200)
+    indices = torch.randperm(datas_pre[0].m)[:2000]
 
     for data in new_datas:
         data.indices = indices
@@ -40,8 +41,10 @@ else:
 
         data.gp = gp
         data.flow = flow
+        print("fitting GP")
         optimize.gp(data, num_epochs=200)
-        optimize.fl_vecchia(data, num_epochs=120)
+        print("fitting flow")
+        optimize.fl_vecchia(data, num_epochs=100)
 
     datas_fit.extend(new_datas)
     with open(fit_file_path, 'wb') as f:

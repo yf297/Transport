@@ -47,11 +47,7 @@ class data():
         return plot.observations(XY_, Z_, self.extent, frame)
     
     
-    
-    
-    
-    
-    def plot_vel_data(self, indices, frame = 0, color = "red"):
+    def plot_vel_data(self, indices, frame = 0, color = "blue"):
         T_ = self.T
         XY_UV_ = self.XY_UV
         XY_UV =  [XY_UV_[i][indices,:] for i in range(0,T_.shape[0])]

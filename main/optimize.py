@@ -13,11 +13,12 @@ def gp(data, num_epochs=75):
     
     XY = data.XY[data.indices,:]
     mean = XY.mean(dim=-2, keepdim=True)
-    std = std =  XY.view(-1).std() + 1e-6
+    std = XY.view(-1).std() + 1e-6
     XY = (XY - mean) / std
     data.input_std = std
 
     gp.train()
+    gp.likelihood.train()
     optimizer = torch.optim.Adam([
         {'params': gp.kernel.parameters(), 'lr': 0.1},
         {'params': gp.mean.parameters(), 'lr': 0.01},
@@ -55,7 +56,6 @@ def gp(data, num_epochs=75):
 def fl_vecchia(data, num_epochs=100):
     gp = data.gp
     flow = data.flow
-    
     T = data.T
     
     Z = [z[data.indices] for z in data.Z]
@@ -65,7 +65,7 @@ def fl_vecchia(data, num_epochs=100):
     
     XY = data.XY[data.indices,:]
     mean = XY.mean(dim=-2, keepdim=True)
-    std = std =  XY.view(-1).std() + 1e-6
+    std = XY.view(-1).std() + 1e-6
     XY = (XY - mean) / std
         
     
@@ -96,28 +96,28 @@ def fl_vecchia(data, num_epochs=100):
                 loss = 0
                 for i in range(1,data.n):
                     j = max(0, i-1)
-                    points0 = torch.cat(points[j:i]).cuda()
-                    
-                    Z0 = torch.cat(Z[j:i]).reshape(-1).view(-1).cuda()
-                    
-                    gp.set_train_data(points0, Z0, strict=False)                    
-                    gp.eval()
+                    with torch.no_grad():
+                        points0 = torch.cat(points[j:i]).cuda()
+                        Z0 = torch.cat(Z[j:i]).reshape(-1).view(-1).cuda()
+                        gp.set_train_data(points0, Z0, strict=False)                    
+                        gp.eval()
+                        gp.likelihood.eval()
                     
                     points1 = points[i].cuda()
                     Z1 = Z[i].cuda()
-
                     posterior = gp(points1)
-                    loss += -mll(posterior,Z1).div_(data.n-1)
-                        
+                    loss += -mll(posterior,Z1)/(data.n-1)
                     
                 loss.backward()
                 optimizer.step()
-                gp.train()
 
-                lengthscale = gp.kernel.base_kernel.lengthscale
-                lengthscale[0,1] = fixed1
-                lengthscale[0,2] = fixed2
-                gp.kernel.base_kernel.lengthscale = lengthscale
+                with torch.no_grad():
+                    gp.train()
+                    gp.likelihood.train()
+                    lengthscale = gp.kernel.base_kernel.lengthscale
+                    lengthscale[0,1] = fixed1
+                    lengthscale[0,2] = fixed2
+                    gp.kernel.base_kernel.lengthscale = lengthscale
 
                 if epoch % 10 == 0:
                     print(f'Epoch: {epoch} - Likelihood: {loss.item():.3f}')

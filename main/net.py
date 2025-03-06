@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
     
 class Flow(nn.Module):
-    def __init__(self, d=2, L=1, w=48):
+    def __init__(self, d=2, L=1, w=32):
         super(Flow, self).__init__()
               
         layers = [nn.Linear(d + 1, w), nn.Tanh()]
@@ -24,4 +24,3 @@ class Flow(nn.Module):
         tXY = torch.cat([t.repeat(XY.shape[0],1),
                              XY], dim = -1)
         return XY + t*self.net(tXY)
-    

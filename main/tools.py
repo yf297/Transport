@@ -57,40 +57,39 @@ def generate_time_ranges(date, minutes, hours):
 
 
 def generate_dates(n):
-    start_date = date(2024, 1, 1)
-    end_date = date(2024, 12, 31)
-    delta = (end_date - start_date).days
+    start_date = date(2024, 7, 1)
+    end_date = date(2024, 8, 31)
 
-    dates = []
-    for _ in range(n):
-        days_offset = random.randint(0, delta)
-        random_date = start_date + timedelta(days=days_offset)
-        dates.append(random_date.strftime("%Y-%m-%d"))
-    return dates
+    all_dates = [
+        (start_date + timedelta(days=i)).strftime("%Y-%m-%d")
+        for i in range((end_date - start_date).days + 1)
+    ]
 
+    random.shuffle(all_dates)
+    return all_dates[:n]
 
 def point_sampling(points, min_dist, max_samples=1000):
     n = points.shape[0]
-    perm = torch.randperm(n)  
-    chosen = [perm[0]]  
-    idx = 1
+    perm = torch.randperm(n)
+    chosen = []
 
-    while idx < n and len(chosen) < max_samples:
-        candidate_idx = perm[idx]
-        candidate = points[candidate_idx]
+    for idx in perm:
+        candidate = points[idx]
+        if len(chosen) == 0:
+            chosen.append(idx.item())
+            continue
 
-        # Get selected points
-        chosen_points = points[torch.tensor(chosen)]
-
-        # Check if candidate satisfies min_dist constraint
+        chosen_points = points[chosen]
         dists = torch.norm(candidate - chosen_points, dim=1)
-        
-        if torch.all(dists >= min_dist):
-            chosen.append(candidate_idx)
 
-        idx += 1  # Move to the next candidate
+        if torch.all(dists >= min_dist):
+            chosen.append(idx.item())
+
+        if len(chosen) >= max_samples:
+            break
 
     return torch.tensor(chosen)
+
 
 
 def rmse(data, scale = 1, mag = 1):
@@ -109,9 +108,11 @@ def rmse(data, scale = 1, mag = 1):
             dim = -1).detach() for i in range(0,T.shape[0])]
         
     errors =  [
-            torch.sqrt(torch.sum((data.XY_UV[i][:,2] - XY_UV[i][:,2])**2) / data.m + 
-            torch.sum((data.XY_UV[i][:,3] - XY_UV[i][:,3])**2) / data.m)
-            
+            torch.sqrt( (1/data.m) *
+                       ( torch.sum( (data.XY_UV[i][:,2] - XY_UV[i][:,2])**2)  + 
+                         torch.sum( (data.XY_UV[i][:,3] - XY_UV[i][:,3])**2)
+                       )
+                      )
             for i in range(data.n)
             ]   
     return torch.stack(errors).mean()
