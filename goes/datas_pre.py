@@ -7,10 +7,10 @@ import pickle
 from main import get_data, model, tools
 
 
-sat = "hrrr"
-levels = ["500 mb", "700 mb"]
+sat = "goes"
+levels = ["CMI_C08", "CMI_C09"]
 extent =[-96, -79, 30, 37]
-dates = ["2024-08-18"]
+dates = ["2024-08-18"] 
 
 file_path = f'datas/datas_pre.pkl'
 
@@ -29,14 +29,12 @@ for date in dates:
         continue 
     
     for level in levels:
-        print("getting")
-        T, XY, Z, XY_UV = get_data.hrrr(date=date, level=level, hours=6, extent=extent)
-        data_entry = model.data(T, XY, Z, XY_UV)
+        T, XY, Z = get_data.goes(date=date, band=level, minutes = 60, hours=6, extent=extent)
+        data_entry = model.data(T, XY, Z)
         data_entry.extent = extent
         data_entry.date = date
         data_entry.level = level
         new_datas.append(data_entry)
-        print("done")
 
 if new_datas:
     existing_datas.extend(new_datas)

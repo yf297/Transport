@@ -29,6 +29,8 @@ def hrrr(date, level, hours, extent):
     
     data = data.assign_coords(x=("x",  grid[0,:,0]))
     data = data.assign_coords(y=("y",  grid[:,0,1]))
+    data = data.isel(y=slice(None, None, 11), x=slice(None, None, 11))
+
     
     (l,d) = tools.Lambert_proj.transform_point(extent[0],extent[2],ccrs.Geodetic())
     (r,u) = tools.Lambert_proj.transform_point(extent[1],extent[3],ccrs.Geodetic())
@@ -51,10 +53,7 @@ def hrrr(date, level, hours, extent):
 
 
 
-
-
-
-def goes(date, minutes, hours, extent):
+def goes(date, minutes, hours, band, extent):
     data_sets = []
     time_list = tools.generate_time_ranges(date, minutes, hours)
     total_times = len(time_list)
@@ -68,8 +67,9 @@ def goes(date, minutes, hours, extent):
         data_sets.append(ds)
 
     data = xr.concat(data_sets, dim="time")
-    data = data[["CMI_C08","CMI_C09","CMI_C10","goes_imager_projection"]]
+    data = data[[band,"goes_imager_projection"]]
     data = data.dropna(dim = "x")
+    data = data.isel(y=slice(None, None, 14), x=slice(None, None, 14))
     
     T = torch.linspace(0, hours/24, total_times)
     
@@ -87,21 +87,14 @@ def goes(date, minutes, hours, extent):
     mask = (XY[:, 0] >= l) & (XY[:, 0] <= r) & (XY[:, 1] >= d) & (XY[:, 1] <= u)
     XY = XY[mask]
     
-    Z08 = torch.tensor(np.flip(data.CMI_C08.values, axis = 1).copy(),
+    Z = torch.tensor(np.flip(data[band].values, axis = 1).copy(),
                      dtype=torch.float32).reshape(total_times,-1) - 273.15
-    Z09 = torch.tensor(np.flip(data.CMI_C09.values, axis = 1).copy(),
-                     dtype=torch.float32).reshape(total_times,-1) - 273.15
-    Z10 = torch.tensor(np.flip(data.CMI_C10.values, axis = 1).copy(),
-                    dtype=torch.float32).reshape(total_times,-1) - 273.15
-    
-    Z08 = [Z[mask] for Z in Z08]
-    Z09 = [Z[mask] for Z in Z09]
-    Z10 = [Z[mask] for Z in Z10]
-    
-    XY_UV = []
 
     
-    return T, XY, [Z08, Z09, Z10], XY_UV
+    Z = [z[mask] for z in Z]
+    
+    
+    return T, XY, Z
 
 
  

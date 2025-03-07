@@ -57,7 +57,7 @@ def generate_time_ranges(date, minutes, hours):
 
 
 def generate_dates(n):
-    start_date = date(2024, 1, 1)
+    start_date = date(2024, 4, 1)
     end_date = date(2024, 12, 30)
 
     all_dates = [
@@ -67,9 +67,6 @@ def generate_dates(n):
 
     random.shuffle(all_dates)
     return all_dates[:n]
-
-
-import torch
 
 def rmse(data, scale=1, mag=1):
     T = data.T
@@ -104,3 +101,82 @@ def rmse(data, scale=1, mag=1):
     return mean_rmse
 
 
+def rmse_U(data, scale=1, mag=1):
+    T = data.T
+    XY = data.XY
+    n_frames = T.shape[0]
+    n_points = XY.shape[0]
+
+    # Initialize UV tensor
+    UV = torch.zeros((n_frames, n_points, 2))
+
+    # Compute velocity for each frame
+    vel = ode.Vel_hat(data)
+    for frame in range(n_frames):
+        UV[frame] = vel(T[frame], XY) * scale * mag
+
+    XY_UV = [torch.cat((XY, UV[frame]), dim=-1).detach() for frame in range(n_frames)]
+
+    errors = []
+    for i in range(data.n):
+        true_U = data.XY_UV[i][:, 2]
+        pred_U = XY_UV[i][:, 2]
+
+        mse_U = torch.mean((true_U - pred_U) ** 2)
+        rmse = torch.sqrt(mse_U)
+        errors.append(rmse)
+
+    mean_rmse = torch.stack(errors).mean()
+
+    return mean_rmse
+
+def rmse_V(data, scale=1, mag=1):
+    T = data.T
+    XY = data.XY
+    n_frames = T.shape[0]
+    n_points = XY.shape[0]
+
+    UV = torch.zeros((n_frames, n_points, 2))
+
+    vel = ode.Vel_hat(data)
+    for frame in range(n_frames):
+        UV[frame] = vel(T[frame], XY) * scale * mag
+
+    XY_UV = [torch.cat((XY, UV[frame]), dim=-1).detach() for frame in range(n_frames)]
+
+    errors = []
+    for i in range(data.n):
+        true_V = data.XY_UV[i][:, 3]
+        pred_V = XY_UV[i][:, 3]
+
+        mse_V = torch.mean((true_V - pred_V) ** 2)
+        rmse = torch.sqrt(mse_V)
+        errors.append(rmse)
+
+    mean_rmse = torch.stack(errors).mean()
+
+    return mean_rmse
+
+
+def point_sampling(points, min_dist, max_samples=1000):
+    n = points.shape[0]
+    perm = torch.randperm(n)  
+    chosen = [perm[0]]  
+    idx = 1
+
+    while idx < n and len(chosen) < max_samples:
+        candidate_idx = perm[idx]
+        candidate = points[candidate_idx]
+
+        # Get selected points
+        chosen_points = points[torch.tensor(chosen)]
+
+        # Check if candidate satisfies min_dist constraint
+        dists = torch.norm(candidate - chosen_points, dim=1)
+        
+        if torch.all(dists >= min_dist):
+            chosen.append(candidate_idx)
+
+        idx += 1  # Move to the next candidate
+
+    return torch.tensor(chosen)

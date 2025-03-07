@@ -10,7 +10,7 @@ import gpytorch
 import torch
 from main import model, optimize, net, tools
 
-sat = "hrrr"
+sat = "goes"
 pre_file_path = f'datas/datas_pre.pkl'
 fit_file_path = f'datas/datas_fit.pkl'
 
@@ -28,10 +28,11 @@ new_datas = [data for data in datas_pre if data.date not in fitted_dates]
 if not new_datas:
     print("No new data to fit.")
 else:
-    indices = torch.randperm(datas_pre[0].m)[:1600]
+    indices = tools.point_sampling(datas_pre[0].XY, min_dist=15000, max_samples=1300)
 
     for data in new_datas:
         data.indices = indices
+
         kernel = gpytorch.kernels.ScaleKernel(
             gpytorch.kernels.MaternKernel(nu=5/2, ard_num_dims=3))
         likelihood = gpytorch.likelihoods.GaussianLikelihood()
