@@ -31,13 +31,12 @@ def gp(data, num_epochs=75):
         Z0 = Z0.cuda()
         points = points.cuda()
     mll = gpytorch.mlls.ExactMarginalLogLikelihood(gp.likelihood, gp)
-
+    with torch.no_grad():
+        gp.set_train_data(points, Z0, strict=False)
+        
     with gpytorch.settings.fast_computations(log_prob=False):
         for epoch in range(1, num_epochs + 1):
             optimizer.zero_grad()
-
-            with torch.no_grad():
-                gp.set_train_data(points, Z0, strict=False)
 
             prior = gp(points)
             ll = -mll(prior, Z0)
@@ -51,6 +50,7 @@ def gp(data, num_epochs=75):
 
     if torch.cuda.is_available():
         data.gp = gp.cpu()
+        
         
         
   

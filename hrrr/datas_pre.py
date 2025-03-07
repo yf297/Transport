@@ -4,13 +4,13 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import pickle
-from main import get_data, tools, model
+from main import get_data, model
 
 
 sat = "hrrr"
 levels = ["500 mb", "700 mb"]
 extent =[-96, -79, 30, 37]
-dates = ["2024-09-13", "2024-07-28", "2024-08-18", "2024-12-08"]
+dates = [ "2024-07-18", "2024-08-18", "2024-09-18"]
 
 
 file_path = f'datas/datas_pre.pkl'

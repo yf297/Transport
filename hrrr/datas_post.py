@@ -42,7 +42,7 @@ with open(pre_file_path, 'wb') as f:
     pickle.dump(filtered_pre, f)
 
 
-frames = [0,2,4]
+frames = [0,3,6]
 
 grouped_data = defaultdict(list)
 for data in filtered_fit:
@@ -63,7 +63,7 @@ for data in filtered_fit:
     os.makedirs(level_dir, exist_ok=True)
 
     # Generate and save plots
-    for frame_num in frames:
+    '''for frame_num in frames:
         indices = torch.randperm(datas_pre[0].m)
         fig = data.plot_observations(indices, frame=frame_num)
         plot_path = os.path.join(level_dir, f"scalar_plot_frame_{frame_num}.png")
@@ -80,7 +80,7 @@ for data in filtered_fit:
         fig = data.plot_vel_data(indices, frame=frame_num, color="blue")
         plot_path = os.path.join(level_dir, f"true_plot_frame_{frame_num}.png")
         fig.savefig(plot_path)
-        plt.close(fig)
+        plt.close(fig)'''
 
 # Generate LaTeX table with grouped dates
 latex_table = "\\begin{table}[ht]\n\\centering\n\\begin{tabular}{llrrrrrrr}\n\\hline\n"
