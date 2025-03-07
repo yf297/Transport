@@ -12,7 +12,6 @@ from collections import defaultdict
 import matplotlib.pyplot as plt
 import torch
 
-sat = "hrrr"
 pre_file_path = f'datas/datas_pre.pkl'
 fit_file_path = f'datas/datas_fit.pkl'
 
@@ -59,8 +58,7 @@ for data in filtered_fit:
     ]
     grouped_data[data.date].append(row)
 
-    # Create directories for saving plots
-    date_dir = os.path.join(f"results/{sat}/plots", str(data.date))
+    date_dir = os.path.join(f"results/plots", str(data.date))
     level_dir = os.path.join(date_dir, str(data.level))
     os.makedirs(level_dir, exist_ok=True)
 
@@ -100,5 +98,5 @@ for date, rows in sorted(grouped_data.items()):
 latex_table += "\\end{tabular}\n\\caption{}\n\\label{tab:cov_est}\n\\end{table}"
 
 # Save LaTeX table to a file
-with open(f"results/{sat}/table.txt", "w") as f:
+with open(f"results/table.txt", "w") as f:
     f.write(latex_table)

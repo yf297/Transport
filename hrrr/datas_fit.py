@@ -28,7 +28,7 @@ new_datas = [data for data in datas_pre if data.date not in fitted_dates]
 if not new_datas:
     print("No new data to fit.")
 else:
-    indices = torch.randperm(datas_pre[0].m)[:2000]
+    indices = torch.randperm(datas_pre[0].m)[:1600]
 
     for data in new_datas:
         data.indices = indices
@@ -37,7 +37,7 @@ else:
             gpytorch.kernels.MaternKernel(nu=5/2, ard_num_dims=3))
         likelihood = gpytorch.likelihoods.GaussianLikelihood()
         gp = model.GP(kernel, likelihood)
-        flow = net.Flow(L=4)
+        flow = net.Flow(L=5)
 
         data.gp = gp
         data.flow = flow

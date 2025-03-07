@@ -24,3 +24,18 @@ class Flow(nn.Module):
         tXY = torch.cat([t.repeat(XY.shape[0],1),
                              XY], dim = -1)
         return XY + t*self.net(tXY)
+
+
+class warp(nn.Module):
+    def __init__(self, w=4):
+        super(warp, self).__init__()
+              
+        layers = [nn.Linear(2, w), nn.Tanh()]
+        final_layer = nn.Linear(w, 2)
+        layers.append(final_layer)
+        self.net = nn.Sequential(*layers)
+        nn.init.constant_(final_layer.weight, 0.0)
+
+        
+    def forward(self,XY):
+        return XY + self.net(XY)

@@ -9,8 +9,8 @@ from main import get_data, tools, model
 
 sat = "hrrr"
 levels = ["500 mb", "700 mb"]
-extent =[-95, -75, 30, 37]
-dates = tools.generate_dates(10)
+extent =[-96, -79, 30, 37]
+dates = ["2024-09-13", "2024-07-28", "2024-08-18", "2024-12-08"]
 
 
 file_path = f'datas/datas_pre.pkl'
@@ -31,7 +31,7 @@ for date in dates:
         continue 
     
     for level in levels:
-        T, XY, Z, XY_UV = get_data.hrrr(date=date, level=level, hours=5, extent=extent)
+        T, XY, Z, XY_UV = get_data.hrrr(date=date, level=level, hours=6, extent=extent)
         data_entry = model.data(T, XY, Z, XY_UV)
         data_entry.extent = extent
         data_entry.date = date

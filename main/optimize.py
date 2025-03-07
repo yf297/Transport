@@ -22,22 +22,23 @@ def gp(data, num_epochs=75):
     optimizer = torch.optim.Adam([
         {'params': gp.kernel.parameters(), 'lr': 0.1},
         {'params': gp.mean.parameters(), 'lr': 0.01},
-        {'params': gp.likelihood.parameters(), 'lr': 0.1},
+        {'params': gp.likelihood.parameters(), 'lr': 0.1}
     ])
-
     points = torch.cat([T[0].repeat(XY.shape[0], 1), XY], dim=-1)
 
     if torch.cuda.is_available():
         gp = gp.cuda()
         Z0 = Z0.cuda()
         points = points.cuda()
-
-    gp.set_train_data(points, Z0, strict=False)
     mll = gpytorch.mlls.ExactMarginalLogLikelihood(gp.likelihood, gp)
 
     with gpytorch.settings.fast_computations(log_prob=False):
         for epoch in range(1, num_epochs + 1):
             optimizer.zero_grad()
+
+            with torch.no_grad():
+                gp.set_train_data(points, Z0, strict=False)
+
             prior = gp(points)
             ll = -mll(prior, Z0)
             loss = ll
@@ -57,7 +58,7 @@ def fl_vecchia(data, num_epochs=100):
     gp = data.gp
     flow = data.flow
     T = data.T
-    
+
     Z = [z[data.indices] for z in data.Z]
     mean = torch.cat(Z).reshape(-1).mean()
     std =  torch.cat(Z).reshape(-1).std()
@@ -71,6 +72,7 @@ def fl_vecchia(data, num_epochs=100):
     
     if torch.cuda.is_available():
         gp = gp.cuda()
+        
         
     optimizer = torch.optim.AdamW([
         {'params': flow.parameters(), 'lr':  1e-2, "weight_decay":1},
@@ -125,4 +127,3 @@ def fl_vecchia(data, num_epochs=100):
     if torch.cuda.is_available():
         data.gp = gp.cpu()
         data.flow = flow.cpu()
-        
