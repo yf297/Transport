@@ -28,7 +28,7 @@ new_datas = [data for data in datas_pre if data.date not in fitted_dates]
 if not new_datas:
     print("No new data to fit.")
 else:
-    indices = torch.randperm(datas_pre[0].m)[:1600]
+    indices = torch.randperm(datas_pre[0].m)
 
     for data in new_datas:
         data.indices = indices

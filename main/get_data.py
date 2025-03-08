@@ -9,7 +9,7 @@ from . import tools
 
 geo = ccrs.Geostationary(central_longitude=-137.0, satellite_height=35786023.0)
 
-def hrrr(date, level, hours, extent):
+def hrrr(date, level, hours, extent, factor):
     paths = []
     time_list = tools.generate_time_ranges(date, minutes = 60, hours = hours)
     total_times = len(time_list)
@@ -29,7 +29,7 @@ def hrrr(date, level, hours, extent):
     
     data = data.assign_coords(x=("x",  grid[0,:,0]))
     data = data.assign_coords(y=("y",  grid[:,0,1]))
-    data = data.isel(y=slice(None, None, 11), x=slice(None, None, 11))
+    data = data.isel(y=slice(None, None, factor), x=slice(None, None, factor))
 
     
     (l,d) = tools.Lambert_proj.transform_point(extent[0],extent[2],ccrs.Geodetic())
@@ -53,7 +53,7 @@ def hrrr(date, level, hours, extent):
 
 
 
-def goes(date, minutes, hours, band, extent):
+def goes(date, minutes, hours, band, extent, factor):
     data_sets = []
     time_list = tools.generate_time_ranges(date, minutes, hours)
     total_times = len(time_list)
@@ -69,7 +69,7 @@ def goes(date, minutes, hours, band, extent):
     data = xr.concat(data_sets, dim="time")
     data = data[[band,"goes_imager_projection"]]
     data = data.dropna(dim = "x")
-    data = data.isel(y=slice(None, None, 14), x=slice(None, None, 14))
+    data = data.isel(y=slice(None, None, factor), x=slice(None, None, factor))
     
     T = torch.linspace(0, hours/24, total_times)
     

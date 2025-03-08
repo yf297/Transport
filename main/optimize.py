@@ -75,7 +75,7 @@ def fl_vecchia(data, num_epochs=100):
         
         
     optimizer = torch.optim.AdamW([
-        {'params': flow.parameters(), 'lr':  1e-2, "weight_decay":1},
+        {'params': flow.parameters(), 'lr':  1e-2, "weight_decay":0.1},
         {'params': gp.kernel.base_kernel.parameters(), 'lr': 0.1},
         ])
         
@@ -97,10 +97,10 @@ def fl_vecchia(data, num_epochs=100):
                 
                 loss = 0
                 for i in range(1,data.n):
-                    j = max(0, i-1)
+                    j = max(0, i-2)
                     with torch.no_grad():
                         points0 = torch.cat(points[j:i]).cuda()
-                        Z0 = torch.cat(Z[j:i]).reshape(-1).view(-1).cuda()
+                        Z0 = torch.cat(Z[j:i]).reshape(-1).cuda()
                         gp.set_train_data(points0, Z0, strict=False)                    
                         gp.eval()
                         gp.likelihood.eval()

@@ -11,6 +11,7 @@ from tabulate import tabulate
 from main import tools
 from collections import defaultdict
 import matplotlib.pyplot as plt
+import torch
 
 pre_file_path = f'datas/datas_pre.pkl'
 fit_file_path = f'datas/datas_fit.pkl'
@@ -21,6 +22,8 @@ with open(fit_file_path, 'rb') as f:
 filtered_fit = [
     data for data in datas_fit if tools.rmse(data, scale=1/86400).item() <= 6
 ]
+
+
 date_levels = defaultdict(set)
 for data in filtered_fit:
     date_levels[data.date].add(data.level)
@@ -42,7 +45,7 @@ with open(pre_file_path, 'wb') as f:
     pickle.dump(filtered_pre, f)
 
 
-frames = [0,3,6]
+frames = [0]
 
 grouped_data = defaultdict(list)
 for data in filtered_fit:
@@ -66,8 +69,7 @@ for data in filtered_fit:
     level_dir = os.path.join(date_dir, str(data.level))
     os.makedirs(level_dir, exist_ok=True)
 
-    # Generate and save plots
-    '''for frame_num in frames:
+    for frame_num in frames:
         indices = torch.randperm(datas_pre[0].m)
         fig = data.plot_observations(indices, frame=frame_num)
         plot_path = os.path.join(level_dir, f"scalar_plot_frame_{frame_num}.png")
@@ -84,7 +86,7 @@ for data in filtered_fit:
         fig = data.plot_vel_data(indices, frame=frame_num, color="blue")
         plot_path = os.path.join(level_dir, f"true_plot_frame_{frame_num}.png")
         fig.savefig(plot_path)
-        plt.close(fig)'''
+        plt.close(fig)
 
 # Generate LaTeX table with grouped dates
 latex_table = "\\begin{table}[ht]\n\\centering\n\\begin{tabular}{llrrrrrrr}\n\\hline\n"
@@ -106,103 +108,67 @@ with open(f"results/table.txt", "w") as f:
     f.write(latex_table)
     
 
-temporal_lengthscales = []
-rmse_rrmse_ratios = []
+zonal_lengthscales_500 = []
+rmse_u_rms_ratios_500 = []
+zonal_lengthscales_700 = []
+rmse_u_rms_ratios_700 = []
 
 for date, rows in grouped_data.items():
     for row in rows:
-        temporal_lengthscale = row[2]  # Assuming `l_1` corresponds to the temporal lengthscale
-        rmse = row[7] 
-        rms = row[6]  
+        level = row[0]
+        zonal_lengthscale = row[3]
+        rms_u = row[8]
+        rmse_u = row[9]
+        if rms_u > 0:
+            ratio_u = rmse_u / rms_u
+            scaled_lengthscale = zonal_lengthscale / rms_u 
+            if level == "500 mb":
+                zonal_lengthscales_500.append(scaled_lengthscale)
+                rmse_u_rms_ratios_500.append(ratio_u)
+            elif level == "700 mb":
+                zonal_lengthscales_700.append(scaled_lengthscale)
+                rmse_u_rms_ratios_700.append(ratio_u)
 
-        if rms > 0:  # Avoid division by zero
-            ratio = rmse / rms
-            temporal_lengthscales.append(temporal_lengthscale)
-            rmse_rrmse_ratios.append(ratio)
-
-# Convert lists to numpy arrays
-temporal_lengthscales = np.array(temporal_lengthscales)
-rmse_rrmse_ratios = np.array(rmse_rrmse_ratios)
-
-# Sort values for a smooth plot
-sorted_indices = np.argsort(temporal_lengthscales)
-temporal_lengthscales = temporal_lengthscales[sorted_indices]
-rmse_rrmse_ratios = rmse_rrmse_ratios[sorted_indices]
-
-# Plot RMSE/RRMSE ratio vs Temporal Lengthscale
-plt.figure(figsize=(8, 5))
-plt.plot(temporal_lengthscales, rmse_rrmse_ratios, marker='o', linestyle='-', color='b', label="RMSE/RMS")
-plt.xlabel("Temporal Lengthscale")
-plt.ylabel("RMSE / RMS")
-plt.title("RMSE/RMS vs Temporal Lengthscale")
-plt.grid(True)
-plt.legend()
-plt.savefig("results/rmse_vs_temporal.png")
-
-
-temporal_lengthscales = []
-rmse_rrmse_ratios = []
-
-for date, rows in grouped_data.items():
-    for row in rows:
-        temporal_lengthscale = row[3] 
-        rmse = row[9] 
-        rms = row[8]  
-
-        if rms > 0:  # Avoid division by zero
-            ratio = rmse / rms
-            temporal_lengthscales.append(temporal_lengthscale)
-            rmse_rrmse_ratios.append(ratio)
-
-# Convert lists to numpy arrays
-temporal_lengthscales = np.array(temporal_lengthscales)
-rmse_rrmse_ratios = np.array(rmse_rrmse_ratios)
-
-# Sort values for a smooth plot
-sorted_indices = np.argsort(temporal_lengthscales)
-temporal_lengthscales = temporal_lengthscales[sorted_indices]
-rmse_rrmse_ratios = rmse_rrmse_ratios[sorted_indices]
-
-# Plot RMSE/RRMSE ratio vs Temporal Lengthscale
-plt.figure(figsize=(8, 5))
-plt.plot(temporal_lengthscales, rmse_rrmse_ratios, marker='o', linestyle='-', color='b', label="RMSE_U/RMS_U")
-plt.xlabel("Zonal Lengthscale")
-plt.ylabel("RMSE_U/RMS_U")
-plt.title("RMSE_U/RMS_U vs Zonal Lengthscale")
+plt.figure()
+plt.scatter(zonal_lengthscales_500, rmse_u_rms_ratios_500, color='blue', label='500 mb')
+plt.scatter(zonal_lengthscales_700, rmse_u_rms_ratios_700, color='red', label='700 mb')
+plt.xlabel("Zonal Lengthscale / RMS_U")
+plt.ylabel("RMSE_U / RMS_U")
+plt.title("RMSE_U/RMS_U vs (Zonal Lengthscale / RMS_U)")
 plt.grid(True)
 plt.legend()
 plt.savefig("results/rmse_vs_zonal.png")
+plt.close()
 
 
-temporal_lengthscales = []
-rmse_rrmse_ratios = []
+meridional_lengthscales_500 = []
+rmse_v_rms_ratios_500 = []
+meridional_lengthscales_700 = []
+rmse_v_rms_ratios_700 = []
 
 for date, rows in grouped_data.items():
     for row in rows:
-        temporal_lengthscale = row[4]  # Assuming `l_1` corresponds to the temporal lengthscale
-        rmse = row[11] 
-        rms = row[10]  
+        level = row[0]
+        meridional_lengthscale = row[4]
+        rms_v = row[10]
+        rmse_v = row[11]
+        if rms_v > 0:
+            ratio_v = rmse_v / rms_v
+            scaled_lengthscale = meridional_lengthscale / rms_v 
+            if level == "500 mb":
+                meridional_lengthscales_500.append(scaled_lengthscale)
+                rmse_v_rms_ratios_500.append(ratio_v)
+            elif level == "700 mb":
+                meridional_lengthscales_700.append(scaled_lengthscale)
+                rmse_v_rms_ratios_700.append(ratio_v)
 
-        if rms > 0:  # Avoid division by zero
-            ratio = rmse / rms
-            temporal_lengthscales.append(temporal_lengthscale)
-            rmse_rrmse_ratios.append(ratio)
-
-# Convert lists to numpy arrays
-temporal_lengthscales = np.array(temporal_lengthscales)
-rmse_rrmse_ratios = np.array(rmse_rrmse_ratios)
-
-# Sort values for a smooth plot
-sorted_indices = np.argsort(temporal_lengthscales)
-temporal_lengthscales = temporal_lengthscales[sorted_indices]
-rmse_rrmse_ratios = rmse_rrmse_ratios[sorted_indices]
-
-# Plot RMSE/RRMSE ratio vs Temporal Lengthscale
-plt.figure(figsize=(8, 5))
-plt.plot(temporal_lengthscales, rmse_rrmse_ratios, marker='o', linestyle='-', color='b', label="RMSE_V/RMS_V")
-plt.xlabel("Meridional Lengthscale")
-plt.ylabel("RMSE_V/RMS_V")
-plt.title("RMSE_V/RMS_V vs Meridional Lengthscale")
+plt.figure()
+plt.scatter(meridional_lengthscales_500, rmse_v_rms_ratios_500, color='blue', label='500 mb')
+plt.scatter(meridional_lengthscales_700, rmse_v_rms_ratios_700, color='red', label='700 mb')
+plt.xlabel("Meridional Lengthscale / RMS_V")
+plt.ylabel("RMSE_V / RMS_V")
+plt.title("RMSE_V/RMS_V vs (Meridional Lengthscale / RMS_V)")
 plt.grid(True)
 plt.legend()
 plt.savefig("results/rmse_vs_meridional.png")
+plt.close()

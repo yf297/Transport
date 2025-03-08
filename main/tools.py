@@ -156,27 +156,3 @@ def rmse_V(data, scale=1, mag=1):
     mean_rmse = torch.stack(errors).mean()
 
     return mean_rmse
-
-
-def point_sampling(points, min_dist, max_samples=1000):
-    n = points.shape[0]
-    perm = torch.randperm(n)  
-    chosen = [perm[0]]  
-    idx = 1
-
-    while idx < n and len(chosen) < max_samples:
-        candidate_idx = perm[idx]
-        candidate = points[candidate_idx]
-
-        # Get selected points
-        chosen_points = points[torch.tensor(chosen)]
-
-        # Check if candidate satisfies min_dist constraint
-        dists = torch.norm(candidate - chosen_points, dim=1)
-        
-        if torch.all(dists >= min_dist):
-            chosen.append(candidate_idx)
-
-        idx += 1  # Move to the next candidate
-
-    return torch.tensor(chosen)
