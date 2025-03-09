@@ -7,8 +7,8 @@ import pickle
 from main import get_data, model, tools
 
 levels = ["500 mb", "700 mb"]
-extent =[-96, -77.5, 26.5, 37]
-dates = ["2024-06-23", "2024-07-21", "2024-08-18", "2024-09-30", "2024-10-11"]
+extent =[-96, -75, 26, 37]
+dates = [ "2024-08-18", "2024-06-23", "2024-07-21", "2024-09-30", "2024-10-11"] + tools.generate_dates(11)
 file_path = f'datas/datas_pre.pkl'
 
 if os.path.exists(file_path):
@@ -26,7 +26,7 @@ for date in dates:
         continue 
     
     for level in levels:
-        T, XY, Z, XY_UV = get_data.hrrr(date=date, level=level, hours=6, extent=extent, factor = 9)
+        T, XY, Z, XY_UV = get_data.hrrr(date=date, level=level, hours=6, extent=extent, factor = 10)
         data_entry = model.data(T, XY, Z, XY_UV)
         data_entry.extent = extent
         data_entry.date = date
