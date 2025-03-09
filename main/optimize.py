@@ -75,7 +75,7 @@ def fl_vecchia(data, num_epochs=100):
         
         
     optimizer = torch.optim.AdamW([
-        {'params': flow.parameters(), 'lr':  1e-2, "weight_decay":0.1},
+        {'params': flow.parameters(), 'lr':  1e-2},
         {'params': gp.kernel.base_kernel.parameters(), 'lr': 0.1},
         ])
         
