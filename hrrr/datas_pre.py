@@ -8,7 +8,7 @@ from main import get_data, model, tools
 
 levels = ["500 mb", "700 mb"]
 extent =[-96, -75, 26, 37]
-dates = [ "2024-08-18", "2024-06-23", "2024-07-24", "2024-09-30", "2024-10-11"] #+ tools.generate_dates(11)
+dates = [ "2024-06-23", "2024-07-25", "2024-08-06", "2024-08-18","2024-09-13", "2024-09-30", "2024-10-11"] + tools.generate_dates(3)
 file_path = f'datas/datas_pre.pkl'
 
 if os.path.exists(file_path):

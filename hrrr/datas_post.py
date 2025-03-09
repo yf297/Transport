@@ -70,11 +70,11 @@ for data in filtered_fit:
     os.makedirs(level_dir, exist_ok=True)
 
     for frame_num in frames:
-        indices = torch.randperm(datas_pre[0].m)
-        fig = data.plot_observations(indices, frame=frame_num)
-        plot_path = os.path.join(level_dir, f"scalar_plot_frame_{frame_num}.png")
-        fig.savefig(plot_path)
-        plt.close(fig)
+        #indices = torch.randperm(datas_pre[0].m)
+        #fig = data.plot_observations(indices, frame=frame_num)
+        #plot_path = os.path.join(level_dir, f"scalar_plot_frame_{frame_num}.png")
+        #fig.savefig(plot_path)
+        #plt.close(fig)
 
         indices = data.indices[:600]
         fig = data.plot_vel(indices, frame=frame_num, color="red")
