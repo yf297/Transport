@@ -20,7 +20,7 @@ with open(fit_file_path, 'rb') as f:
     datas_fit = pickle.load(f)
 
 filtered_fit = [
-    data for data in datas_fit if tools.rmse(data, scale=1/86400).item() <= 6
+    data for data in datas_fit if tools.rmse(data, scale=1/86400).item() <= 5
 ]
 
 
@@ -30,6 +30,10 @@ for data in filtered_fit:
 valid_dates = {date for date, levels in date_levels.items() if {"500 mb", "700 mb"}.issubset(levels)}
 filtered_fit = [data for data in filtered_fit if data.date in valid_dates]
 
+unique_by_date_level = {}
+for d in filtered_fit:
+    unique_by_date_level[(d.date, d.level)] = d
+filtered_fit = list(unique_by_date_level.values())
 
 valid_dates = {data.date for data in filtered_fit}
 
@@ -77,7 +81,7 @@ for data in filtered_fit:
         #plt.close(fig)
 
         indices = data.indices[:600]
-        fig = data.plot_vel(indices, frame=frame_num, color="red")
+        fig = data.plot_vel(indices, frame=frame_num, color="blue")
         plot_path = os.path.join(level_dir, f"estimated_plot_frame_{frame_num}.png")
         fig.savefig(plot_path)
         plt.close(fig)
@@ -132,9 +136,8 @@ for date, rows in grouped_data.items():
 plt.figure()
 plt.scatter(zonal_lengthscales_500, rmse_u_rms_ratios_500, color='blue', label='500 mb')
 plt.scatter(zonal_lengthscales_700, rmse_u_rms_ratios_700, color='red', label='700 mb')
-plt.xlabel("Zonal Lengthscale / RMS_U")
-plt.ylabel("RMSE_U / RMS_U")
-plt.title("RMSE_U/RMS_U vs (Zonal Lengthscale / RMS_U)")
+plt.xlabel("Zonal Lengthscale / Zonal RMS")
+plt.ylabel("Zonal RMSE / Zonal RMS")
 plt.grid(True)
 plt.legend()
 plt.savefig("results/rmse_vs_zonal.png")
@@ -165,9 +168,8 @@ for date, rows in grouped_data.items():
 plt.figure()
 plt.scatter(meridional_lengthscales_500, rmse_v_rms_ratios_500, color='blue', label='500 mb')
 plt.scatter(meridional_lengthscales_700, rmse_v_rms_ratios_700, color='red', label='700 mb')
-plt.xlabel("Meridional Lengthscale / RMS_V")
-plt.ylabel("RMSE_V / RMS_V")
-plt.title("RMSE_V/RMS_V vs (Meridional Lengthscale / RMS_V)")
+plt.xlabel("Meridional Lengthscale / Meridional RMS")
+plt.ylabel("Meridional RMSE / Meridional RMS")
 plt.grid(True)
 plt.legend()
 plt.savefig("results/rmse_vs_meridional.png")

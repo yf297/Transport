@@ -24,7 +24,7 @@ else:
 
 fitted_dates = {data.date for data in datas_fit}
 new_datas = [data for data in datas_pre if data.date not in fitted_dates]
-
+i = 1
 if not new_datas:
     print("No new data to fit.")
 else:
@@ -40,9 +40,9 @@ else:
 
         data.gp = gp
         data.flow = flow
-        print("fitting GP")
+        print(i)
+        i = i+1
         optimize.gp(data, num_epochs=200)
-        print("fitting flow")
         optimize.fl_vecchia(data, num_epochs=100)
 
     datas_fit.extend(new_datas)

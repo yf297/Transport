@@ -57,7 +57,7 @@ def generate_time_ranges(date, minutes, hours):
 
 
 def generate_dates(n):
-    start_date = date(2024, 4, 1)
+    start_date = date(2024, 1, 1)
     end_date = date(2024, 12, 30)
 
     all_dates = [
