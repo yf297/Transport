@@ -29,12 +29,6 @@ for data in filtered_fit:
     date_levels[data.date].add(data.level)
 valid_dates = {date for date, levels in date_levels.items() if {"500 mb", "700 mb"}.issubset(levels)}
 filtered_fit = [data for data in filtered_fit if data.date in valid_dates]
-
-unique_by_date_level = {}
-for d in filtered_fit:
-    unique_by_date_level[(d.date, d.level)] = d
-filtered_fit = list(unique_by_date_level.values())
-
 valid_dates = {data.date for data in filtered_fit}
 
 with open(pre_file_path, 'rb') as f:
@@ -74,12 +68,6 @@ for data in filtered_fit:
     os.makedirs(level_dir, exist_ok=True)
 
     for frame_num in frames:
-        #indices = torch.randperm(datas_pre[0].m)
-        #fig = data.plot_observations(indices, frame=frame_num)
-        #plot_path = os.path.join(level_dir, f"scalar_plot_frame_{frame_num}.png")
-        #fig.savefig(plot_path)
-        #plt.close(fig)
-
         indices = data.indices[:600]
         fig = data.plot_vel(indices, frame=frame_num, color="blue")
         plot_path = os.path.join(level_dir, f"estimated_plot_frame_{frame_num}.png")

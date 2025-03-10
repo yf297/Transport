@@ -8,8 +8,7 @@ from main import get_data, model, tools
 
 levels = ["500 mb", "700 mb"]
 extent =[-91.65, -75.46, 30.14, 36.68]
-dates = ["2024-09-21",
-         "2024-11-05"] + tools.generate_dates(18)
+dates = ["2024-11-05"] + tools.generate_dates(19)
 file_path = f'datas/datas_pre.pkl'
 
 if os.path.exists(file_path):
@@ -31,7 +30,7 @@ for date in dates:
                                         level=level,
                                         hours=4, 
                                         extent=extent, 
-                                        factor=7)
+                                        factor=6)
         data_entry = model.data(T, XY, Z, XY_UV)
         data_entry.extent = extent
         data_entry.date = date
