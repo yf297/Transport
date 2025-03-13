@@ -4,13 +4,13 @@ warnings.filterwarnings('ignore')
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import time
 
 import pickle
 import gpytorch
 import torch
 from main import model, optimize, net, tools
 
-sat = "goes"
 pre_file_path = f'datas/datas_pre.pkl'
 fit_file_path = f'datas/datas_fit.pkl'
 
@@ -24,15 +24,15 @@ else:
 
 fitted_dates = {data.date for data in datas_fit}
 new_datas = [data for data in datas_pre if data.date not in fitted_dates]
+i = 1
 
 if not new_datas:
     print("No new data to fit.")
 else:
-    indices = tools.point_sampling(datas_pre[0].XY, min_dist=15000, max_samples=1300)
+    indices = torch.randperm(datas_pre[0].m)
 
     for data in new_datas:
         data.indices = indices
-
         kernel = gpytorch.kernels.ScaleKernel(
             gpytorch.kernels.MaternKernel(nu=5/2, ard_num_dims=3))
         likelihood = gpytorch.likelihoods.GaussianLikelihood()
@@ -41,10 +41,12 @@ else:
 
         data.gp = gp
         data.flow = flow
-        print("fitting GP")
+        print(i)
+        i = i+1
+        start_time = time.time()
         optimize.gp(data, num_epochs=200)
-        print("fitting flow")
         optimize.fl_vecchia(data, num_epochs=100)
+        data.time = time.time() - start_time
 
     datas_fit.extend(new_datas)
     with open(fit_file_path, 'wb') as f:

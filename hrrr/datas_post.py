@@ -1,6 +1,7 @@
 import warnings
 warnings.filterwarnings('ignore')
 import numpy as np
+from scipy.stats import linregress
 
 import sys
 import os
@@ -99,11 +100,13 @@ latex_table += "\\end{tabular}\n\\caption{}\n\\label{tab:cov_est}\n\\end{table}"
 with open(f"results/table.txt", "w") as f:
     f.write(latex_table)
     
-
+'''
 zonal_lengthscales_500 = []
 rmse_u_rms_ratios_500 = []
 zonal_lengthscales_700 = []
 rmse_u_rms_ratios_700 = []
+all_zonal_lengthscales = []
+all_rmse_u_rms_ratios = []
 
 for date, rows in grouped_data.items():
     for row in rows:
@@ -114,6 +117,8 @@ for date, rows in grouped_data.items():
         if rms_u > 0:
             ratio_u = rmse_u / rms_u
             scaled_lengthscale = zonal_lengthscale / rms_u 
+            all_zonal_lengthscales.append(scaled_lengthscale)
+            all_rmse_u_rms_ratios.append(ratio_u)
             if level == "500 mb":
                 zonal_lengthscales_500.append(scaled_lengthscale)
                 rmse_u_rms_ratios_500.append(ratio_u)
@@ -124,6 +129,11 @@ for date, rows in grouped_data.items():
 plt.figure()
 plt.scatter(zonal_lengthscales_500, rmse_u_rms_ratios_500, color='blue', label='500 mb')
 plt.scatter(zonal_lengthscales_700, rmse_u_rms_ratios_700, color='red', label='700 mb')
+
+if len(all_zonal_lengthscales) > 1:
+    slope, intercept, _, _, _ = linregress(all_zonal_lengthscales, all_rmse_u_rms_ratios)
+    plt.plot(np.linspace(min(all_zonal_lengthscales), max(all_zonal_lengthscales), 100), slope * np.linspace(min(all_zonal_lengthscales), max(all_zonal_lengthscales), 100) + intercept, 'black', linestyle='--')
+
 plt.xlabel("Zonal Lengthscale / Zonal RMS")
 plt.ylabel("Zonal RMSE / Zonal RMS")
 plt.grid(True)
@@ -131,11 +141,12 @@ plt.legend()
 plt.savefig("results/rmse_vs_zonal.png")
 plt.close()
 
-
 meridional_lengthscales_500 = []
 rmse_v_rms_ratios_500 = []
 meridional_lengthscales_700 = []
 rmse_v_rms_ratios_700 = []
+all_meridional_lengthscales = []
+all_rmse_v_rms_ratios = []
 
 for date, rows in grouped_data.items():
     for row in rows:
@@ -146,6 +157,8 @@ for date, rows in grouped_data.items():
         if rms_v > 0:
             ratio_v = rmse_v / rms_v
             scaled_lengthscale = meridional_lengthscale / rms_v 
+            all_meridional_lengthscales.append(scaled_lengthscale)
+            all_rmse_v_rms_ratios.append(ratio_v)
             if level == "500 mb":
                 meridional_lengthscales_500.append(scaled_lengthscale)
                 rmse_v_rms_ratios_500.append(ratio_v)
@@ -156,9 +169,55 @@ for date, rows in grouped_data.items():
 plt.figure()
 plt.scatter(meridional_lengthscales_500, rmse_v_rms_ratios_500, color='blue', label='500 mb')
 plt.scatter(meridional_lengthscales_700, rmse_v_rms_ratios_700, color='red', label='700 mb')
+
+if len(all_meridional_lengthscales) > 1:
+    slope, intercept, _, _, _ = linregress(all_meridional_lengthscales, all_rmse_v_rms_ratios)
+    plt.plot(np.linspace(min(all_meridional_lengthscales), max(all_meridional_lengthscales), 100), slope * np.linspace(min(all_meridional_lengthscales), max(all_meridional_lengthscales), 100) + intercept, 'black', linestyle='--')
+
 plt.xlabel("Meridional Lengthscale / Meridional RMS")
 plt.ylabel("Meridional RMSE / Meridional RMS")
 plt.grid(True)
 plt.legend()
 plt.savefig("results/rmse_vs_meridional.png")
 plt.close()
+
+temporal_lengthscales_500 = []
+rmse_rms_ratios_500 = []
+temporal_lengthscales_700 = []
+rmse_rms_ratios_700 = []
+all_temporal_lengthscales = []
+all_rmse_rms_ratios = []
+
+for date, rows in grouped_data.items():
+    for row in rows:
+        level = row[0]
+        temporal_lengthscale = row[2]
+        rms = row[6]
+        rmse = row[7]
+        if rms > 0:
+            ratio = rmse / rms
+            scaled_lengthscale = temporal_lengthscale
+            all_temporal_lengthscales.append(scaled_lengthscale)
+            all_rmse_rms_ratios.append(ratio)
+            if level == "500 mb":
+                temporal_lengthscales_500.append(scaled_lengthscale)
+                rmse_rms_ratios_500.append(ratio)
+            elif level == "700 mb":
+                temporal_lengthscales_700.append(scaled_lengthscale)
+                rmse_rms_ratios_700.append(ratio)
+
+plt.figure()
+plt.scatter(temporal_lengthscales_500, rmse_rms_ratios_500, color='blue', label='500 mb')
+plt.scatter(temporal_lengthscales_700, rmse_rms_ratios_700, color='red', label='700 mb')
+
+if len(all_temporal_lengthscales) > 1:
+    slope, intercept, _, _, _ = linregress(all_temporal_lengthscales, all_rmse_rms_ratios)
+    plt.plot(np.linspace(min(all_temporal_lengthscales), max(all_temporal_lengthscales), 100), slope * np.linspace(min(all_temporal_lengthscales), max(all_temporal_lengthscales), 100) + intercept, 'black', linestyle='--')
+
+plt.xlabel("Temporal Lengthscale / RMS")
+plt.ylabel("RMSE / RMS")
+plt.grid(True)
+plt.legend()
+plt.savefig("results/rmse_vs_temporal.png")
+plt.close()
+'''

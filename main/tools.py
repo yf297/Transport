@@ -47,12 +47,14 @@ def calculate_degrees_goes(data):
     return abi_lon[::-1], abi_lat[::-1]
 
 
-def generate_time_ranges(date, minutes, hours):
-    time = datetime.strptime(date + " 00:00", "%Y-%m-%d %H:%M")
-    time_list = [time]
-    for _ in range( ((60//minutes)  * hours) ):
-        time = time + timedelta(minutes=minutes)
-        time_list.append(time)
+def generate_time_ranges(date, minutes, start_time="00:00", end_time="23:59"):
+    start = datetime.strptime(date + " " + start_time, "%Y-%m-%d %H:%M")
+    end = datetime.strptime(date + " " + end_time, "%Y-%m-%d %H:%M")
+    
+    time_list = [start]
+    while time_list[-1] + timedelta(minutes=minutes) <= end:
+        time_list.append(time_list[-1] + timedelta(minutes=minutes))
+    
     return time_list
 
 
@@ -67,6 +69,27 @@ def generate_dates(n):
 
     random.shuffle(all_dates)
     return all_dates[:n]
+
+
+def generate_balanced_times(minutes, center_time="02:00"):
+    center_hour, center_minute = map(int, center_time.split(":"))  # Extract hour and minute
+    center_total_minutes = center_hour * 60 + center_minute  # Convert to total minutes
+    
+    total_range = minutes * 2  # 2 intervals before, 2 after
+
+    start_time = center_total_minutes - total_range
+    end_time = center_total_minutes + total_range
+
+    start_hour = start_time // 60
+    start_minute = start_time % 60
+    end_hour = end_time // 60
+    end_minute = end_time % 60
+
+    start_str = f"{start_hour:02d}:{start_minute:02d}"
+    end_str = f"{end_hour:02d}:{end_minute:02d}"
+
+    return start_str, end_str
+
 
 def rmse(data, scale=1, mag=1):
     T = data.T
