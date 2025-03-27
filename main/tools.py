@@ -1,5 +1,4 @@
 import xarray as xr 
-import cartopy.crs as ccrs
 from datetime import date, datetime, timedelta
 import numpy as np
 import random
@@ -7,50 +6,31 @@ import torch
 
 from . import ode
 
-Geodetic_proj = ccrs.Geodetic()
-
-Lambert_proj = ccrs.LambertConformal(central_longitude=262.5, central_latitude=38.5,
-                                standard_parallels=[38.5,38.5],
-                                globe=ccrs.Globe(semimajor_axis=6371229, 
-                                                 semiminor_axis=6371229))
-
-def process_hrrr(path, i):
-    ds = xr.open_dataset(path, engine='cfgrib')
-    ds.expand_dims(dim={"time": [i]})
-    return ds
-
-def calculate_degrees_goes(data):
-    x_coordinate_1d = data['x'][:] 
-    y_coordinate_1d = data['y'][:]
-    projection_info = data['goes_imager_projection']
-    lon_origin = projection_info.longitude_of_projection_origin
-    H = projection_info.perspective_point_height+projection_info.semi_major_axis
-    r_eq = projection_info.semi_major_axis
-    r_pol = projection_info.semi_minor_axis
-    
-    x_coordinate_2d, y_coordinate_2d = np.meshgrid(x_coordinate_1d, y_coordinate_1d)
-    
-    lambda_0 = (lon_origin*np.pi)/180.0  
-    a_var = np.power(np.sin(x_coordinate_2d),2.0) + (np.power(np.cos(x_coordinate_2d),2.0)*(np.power(np.cos(y_coordinate_2d),2.0)+(((r_eq*r_eq)/(r_pol*r_pol))*np.power(np.sin(y_coordinate_2d),2.0))))
-    b_var = -2.0*H*np.cos(x_coordinate_2d)*np.cos(y_coordinate_2d)
-    c_var = (H**2.0)-(r_eq**2.0)
-    r_s = (-1.0*b_var - np.sqrt((b_var**2)-(4.0*a_var*c_var)))/(2.0*a_var)
-    s_x = r_s*np.cos(x_coordinate_2d)*np.cos(y_coordinate_2d)
-    s_y = - r_s*np.sin(x_coordinate_2d)
-    s_z = r_s*np.cos(x_coordinate_2d)*np.sin(y_coordinate_2d)
-    
-    np.seterr(all='ignore')
-    
-    abi_lat = (180.0/np.pi)*(np.arctan(((r_eq*r_eq)/(r_pol*r_pol))*((s_z/np.sqrt(((H-s_x)*(H-s_x))+(s_y*s_y))))))
-    abi_lon = (lambda_0 - np.arctan(s_y/(H-s_x)))*(180.0/np.pi)
-    
-    return abi_lon[::-1], abi_lat[::-1]
-
-
 def generate_time_ranges(date, minutes, start_time="00:00", end_time="23:59"):
+    """
+    Generate a list of datetime objects at a fixed interval (in minutes) 
+    between a given start and end time for a particular date.
+
+    Parameters:
+    -----------
+    date : str
+        Date string in 'YYYY-MM-DD' format (e.g., '2023-01-01').
+    minutes : int
+        Interval in minutes between each generated time.
+    start_time : str, optional
+        Start time in 'HH:MM' format (default '00:00').
+    end_time : str, optional
+        End time in 'HH:MM' format (default '23:59').
+
+    Returns:
+    --------
+    time_list : list of datetime
+        A list of datetime objects from start to end at the specified interval.
+    """
+
     start = datetime.strptime(date + " " + start_time, "%Y-%m-%d %H:%M")
     end = datetime.strptime(date + " " + end_time, "%Y-%m-%d %H:%M")
-    
+
     time_list = [start]
     while time_list[-1] + timedelta(minutes=minutes) <= end:
         time_list.append(time_list[-1] + timedelta(minutes=minutes))
@@ -59,8 +39,19 @@ def generate_time_ranges(date, minutes, start_time="00:00", end_time="23:59"):
 
 
 def generate_dates(n):
-    start_date = date(2024, 1, 1)
-    end_date = date(2024, 12, 30)
+    """
+    Generate a list of `n` random dates as strings (YYYY-MM-DD) within the range
+    2024-01-01 to 2024-12-30.
+
+    Args:
+        n (int): Number of dates to return.
+
+    Returns:
+        list of str: Randomly shuffled dates of length `n`.
+                     Format: "YYYY-MM-DD".
+    """
+    start_date = date(2024, 6, 1)
+    end_date = date(2024, 6, 30)
 
     all_dates = [
         (start_date + timedelta(days=i)).strftime("%Y-%m-%d")
@@ -71,111 +62,146 @@ def generate_dates(n):
     return all_dates[:n]
 
 
-def generate_balanced_times(minutes, center_time="02:00"):
-    center_hour, center_minute = map(int, center_time.split(":"))  # Extract hour and minute
-    center_total_minutes = center_hour * 60 + center_minute  # Convert to total minutes
-    
-    total_range = minutes * 2  # 2 intervals before, 2 after
-
-    start_time = center_total_minutes - total_range
-    end_time = center_total_minutes + total_range
-
-    start_hour = start_time // 60
-    start_minute = start_time % 60
-    end_hour = end_time // 60
-    end_minute = end_time % 60
-
-    start_str = f"{start_hour:02d}:{start_minute:02d}"
-    end_str = f"{end_hour:02d}:{end_minute:02d}"
-
-    return start_str, end_str
-
-
 def rmse(data, scale=1, mag=1):
+    """
+    Compute the overall RMSE (root mean squared error) in both U and V velocity
+    components, compared to ground-truth data.
+
+    Args:
+        data: An object containing:
+              - data.T: Time steps (tensor of shape [n_frames]).
+              - data.XY: Spatial coordinates (tensor of shape [n_points, 2]).
+              - data.XYP_UV: Ground-truth data (list of tensors, each containing
+                             columns [X, Y, P, U, V], or similar).
+              - data.n: Number of data items to evaluate (int).
+              - Possibly other attributes used by `ode.Vel_hat`.
+        scale (float, optional): Scaling factor for predicted velocities. Defaults to 1.
+        mag (float, optional): Additional multiplier for predicted velocities. Defaults to 1.
+
+    Returns:
+        torch.Tensor: Mean RMSE (scalar) across all frames and data items.
+    """
     T = data.T
     XY = data.XY
     n_frames = T.shape[0]
     n_points = XY.shape[0]
 
-    # Initialize UV tensor
-    UV = torch.zeros((n_frames, n_points, 2))
-
-    # Compute velocity for each frame
+    # Compute predicted velocities for each frame
     vel = ode.Vel_hat(data)
+    UV = torch.zeros((n_frames, n_points, 2))
     for frame in range(n_frames):
         UV[frame] = vel(T[frame], XY) * scale * mag
 
     XY_UV = [torch.cat((XY, UV[frame]), dim=-1).detach() for frame in range(n_frames)]
+    XY_UV_ = [
+        torch.index_select(XYP_UV, dim=1, index=torch.tensor([0, 1, 3, 4]))
+        for XYP_UV in data.XYP_UV
+    ]
 
     errors = []
     for i in range(data.n):
-        true_U = data.XY_UV[i][:, 2]
-        true_V = data.XY_UV[i][:, 3]
+        true_U = XY_UV_[i][:, 2]
+        true_V = XY_UV_[i][:, 3]
         pred_U = XY_UV[i][:, 2]
         pred_V = XY_UV[i][:, 3]
 
         mse_U = torch.mean((true_U - pred_U) ** 2)
         mse_V = torch.mean((true_V - pred_V) ** 2)
-        rmse = torch.sqrt(mse_U + mse_V)
-        errors.append(rmse)
+        rmse_val = torch.sqrt(mse_U + mse_V)
+        errors.append(rmse_val)
 
     mean_rmse = torch.stack(errors).mean()
-
     return mean_rmse
 
 
 def rmse_U(data, scale=1, mag=1):
+    """
+    Compute the RMSE in the U velocity component only.
+
+    Args:
+        data: An object containing:
+              - data.T: Time steps (tensor of shape [n_frames]).
+              - data.XY: Spatial coordinates (tensor of shape [n_points, 2]).
+              - data.XYP_UV: Ground-truth data (list of tensors, each containing
+                             columns [X, Y, P, U, V], or similar).
+              - data.n: Number of data items to evaluate (int).
+        scale (float, optional): Scaling factor for predicted U. Defaults to 1.
+        mag (float, optional): Additional multiplier for predicted U. Defaults to 1.
+
+    Returns:
+        torch.Tensor: Mean RMSE (scalar) across all frames/items for the U component.
+    """
     T = data.T
     XY = data.XY
     n_frames = T.shape[0]
     n_points = XY.shape[0]
 
-    # Initialize UV tensor
-    UV = torch.zeros((n_frames, n_points, 2))
-
-    # Compute velocity for each frame
+    # Compute predicted velocities for each frame
     vel = ode.Vel_hat(data)
+    UV = torch.zeros((n_frames, n_points, 2))
     for frame in range(n_frames):
         UV[frame] = vel(T[frame], XY) * scale * mag
 
     XY_UV = [torch.cat((XY, UV[frame]), dim=-1).detach() for frame in range(n_frames)]
+    XY_UV_ = [
+        torch.index_select(XYP_UV, dim=1, index=torch.tensor([0, 1, 3, 4]))
+        for XYP_UV in data.XYP_UV
+    ]
 
     errors = []
     for i in range(data.n):
-        true_U = data.XY_UV[i][:, 2]
+        true_U = XY_UV_[i][:, 2]
         pred_U = XY_UV[i][:, 2]
-
         mse_U = torch.mean((true_U - pred_U) ** 2)
-        rmse = torch.sqrt(mse_U)
-        errors.append(rmse)
+        rmse_val = torch.sqrt(mse_U)
+        errors.append(rmse_val)
 
     mean_rmse = torch.stack(errors).mean()
-
     return mean_rmse
+
 
 def rmse_V(data, scale=1, mag=1):
+    """
+    Compute the RMSE in the V velocity component only.
+
+    Args:
+        data: An object containing:
+              - data.T: Time steps (tensor of shape [n_frames]).
+              - data.XY: Spatial coordinates (tensor of shape [n_points, 2]).
+              - data.XYP_UV: Ground-truth data (list of tensors, each containing
+                             columns [X, Y, P, U, V], or similar).
+              - data.n: Number of data items to evaluate (int).
+        scale (float, optional): Scaling factor for predicted V. Defaults to 1.
+        mag (float, optional): Additional multiplier for predicted V. Defaults to 1.
+
+    Returns:
+        torch.Tensor: Mean RMSE (scalar) across all frames/items for the V component.
+    """
     T = data.T
     XY = data.XY
     n_frames = T.shape[0]
     n_points = XY.shape[0]
 
-    UV = torch.zeros((n_frames, n_points, 2))
-
+    # Compute predicted velocities for each frame
     vel = ode.Vel_hat(data)
+    UV = torch.zeros((n_frames, n_points, 2))
     for frame in range(n_frames):
         UV[frame] = vel(T[frame], XY) * scale * mag
 
     XY_UV = [torch.cat((XY, UV[frame]), dim=-1).detach() for frame in range(n_frames)]
+    XY_UV_ = [
+        torch.index_select(XYP_UV, dim=1, index=torch.tensor([0, 1, 3, 4]))
+        for XYP_UV in data.XYP_UV
+    ]
 
     errors = []
     for i in range(data.n):
-        true_V = data.XY_UV[i][:, 3]
+        true_V = XY_UV_[i][:, 3]
         pred_V = XY_UV[i][:, 3]
-
         mse_V = torch.mean((true_V - pred_V) ** 2)
-        rmse = torch.sqrt(mse_V)
-        errors.append(rmse)
+        rmse_val = torch.sqrt(mse_V)
+        errors.append(rmse_val)
 
     mean_rmse = torch.stack(errors).mean()
-
     return mean_rmse
+

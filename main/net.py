@@ -1,41 +1,31 @@
 import torch
 import torch.nn as nn
-    
+import torch.nn.functional as F
+
 class Flow(nn.Module):
     def __init__(self, d=2, L=1, w=32):
-        super(Flow, self).__init__()
+        super().__init__()
               
-        layers = [nn.Linear(d + 1, w), nn.Tanh()]
+        layers = []
+        layers.append(nn.Linear(d + 1, w))
+        layers.append(nn.Tanh())
         for _ in range(L - 1):
-            layers += [nn.Linear(w, w), nn.Tanh()]
+            layers.append(nn.Linear(w, w))
+            layers.append(nn.Tanh())
         final_layer = nn.Linear(w, d)
         layers.append(final_layer)
+        
         self.net = nn.Sequential(*layers)
         
-        for module in list(self.net.children())[:-1]:
+        for module in list(self.net.children()):
             if isinstance(module, nn.Linear):
-                nn.init.kaiming_normal_(module.weight, mode="fan_out", nonlinearity="tanh")
-                if module.bias is not None:
-                    nn.init.constant_(module.bias, 0)
+               nn.init.xavier_uniform_(module.weight, gain=nn.init.calculate_gain('tanh'))
         nn.init.constant_(final_layer.weight, 0.0)
-                    
-                
-    def forward(self, t, XY):
-        tXY = torch.cat([t.repeat(XY.shape[0],1),
-                             XY], dim = -1)
-        return XY + t*self.net(tXY)
-
-
-class warp(nn.Module):
-    def __init__(self, w=4):
-        super(warp, self).__init__()
-              
-        layers = [nn.Linear(2, w), nn.Tanh()]
-        final_layer = nn.Linear(w, 2)
-        layers.append(final_layer)
-        self.net = nn.Sequential(*layers)
-        nn.init.constant_(final_layer.weight, 0.0)
-
         
-    def forward(self,XY):
-        return XY + self.net(XY)
+        
+    def forward(self, t, XY):
+        tXY = torch.cat([t.repeat(XY.shape[0],1), XY], dim=-1)
+        net_out = self.net(tXY)
+        return XY + t*net_out
+
+

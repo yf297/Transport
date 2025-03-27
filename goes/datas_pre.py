@@ -1,48 +1,59 @@
 import warnings
 warnings.filterwarnings('ignore')
+
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import pickle
-from main import get_data, model, tools
+
+# Allow imports from the parent directory
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import get_data
+from main import model, tools
+
+# Levels and area of interest
+# Levels and area of interest
+bands = ["CMI_C08","CMI_C09"]
+extent = [-85.7, -78, 30.6, 34.8]
+#[-85.7, -77.9, 30.6, 34.9]
+#[-73.5, -69.4, 41, 42.6]
+#[-83.4, -78, 32.2, 34.8]
+dates = ["2024-09-18"]
+#tools.generate_dates(1)
+hours = 4
+factor = 3
 
 
-levels = ["CMI_C08"]
-extent = [-91.65, -75.46, 30.14, 36.68]
-dates = ["2024-09-05"]
-minutes = [5, 30, 60]
-
-file_path = f'datas/datas_pre.pkl'
-
+file_path = 'datas/datas_pre.pkl'
+# Load existing data if available
 if os.path.exists(file_path):
     with open(file_path, 'rb') as f:
         existing_datas = pickle.load(f)
 else:
     existing_datas = []
 
+# Get the dates we already have
 existing_dates = {data.date for data in existing_datas}
-
 new_datas = []
+
+# For each date, skip if it's already processed, else download and create data entries
 for date in dates:
     if date in existing_dates:
         print(f"Skipping date {date}, already exists.")
-        continue 
-    for level in levels:
-        for minute in minutes:
-            T, XY, Z, XY_UV = get_data.goes(date=date, 
-                                    band=level,
-                                    minutes = minute, 
-                                    center = "02:00",
-                                    extent=extent, 
-                                    factor = 8)
-            data_entry = model.data(T, XY, Z, XY_UV)
-            data_entry.extent = extent
-            data_entry.minutes = minute
-            data_entry.date = date
-            data_entry.level = level
-            new_datas.append(data_entry)
+        continue
+    
+    for band in bands:
+        # Retrieve GOES data
+        data = get_data.goes(
+            date=date,
+            hours=hours, 
+            band=band,
+            extent=extent, 
+            factor=factor
+        )
+        
+        new_datas.append(data)
 
-print(new_datas[0].m) 
+# If we got new data, add to existing and save to file
 if new_datas:
     existing_datas.extend(new_datas)
     with open(file_path, 'wb') as f:
