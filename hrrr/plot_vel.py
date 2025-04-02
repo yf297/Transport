@@ -25,14 +25,14 @@ for data in datas_fit:
     level_dir = os.path.join(date_dir, str(data.level))
     os.makedirs(level_dir, exist_ok=True)
 
-    indices = torch.randperm(data.m)[:600]
+    indices = torch.randperm(data.m)[:400]
     
-    fig = data.plot_vel(indices, frame=2, color="blue")
+    fig = data.plot_vel(indices, scale = 3e-4, frame=4, color="blue")
     plot_path = os.path.join(level_dir, f"estimated_plot_frame_{2}.png")
     fig.savefig(plot_path)
     plt.close(fig)
 
-    fig = data.plot_vel_data(indices, frame=2, color="blue")
+    fig = data.plot_vel_data(indices, scale = 3e-4, frame=4, color="blue")
     plot_path = os.path.join(level_dir, f"true_plot_frame_{2}.png")
     fig.savefig(plot_path)
     plt.close(fig)

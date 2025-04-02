@@ -80,7 +80,7 @@ def calculate_degrees_goes(data):
     return abi_lon, abi_lat
 
 
-def goes(date, hours, band, extent, factor):
+def goes(date, hours, band, extent, factor, minutes):
     """
     Download and process GOES satellite data (multi-band imagery and derived winds)
     for a given date and time range, returning time, spatial coordinates, 
@@ -126,7 +126,7 @@ def goes(date, hours, band, extent, factor):
     # Generate half-hourly time ranges from 00:00 to 'hours' for the given date
     start = "00:00"
     end = str(hours).zfill(2) + ":00"
-    time_list = tools.generate_time_ranges(date, minutes=30, start_time=start, end_time=end)
+    time_list = tools.generate_time_ranges(date, minutes=minutes, start_time=start, end_time=end)
     total_times = len(time_list)
 
     # Download the MCMIP (multi-channel) GOES data for each time
@@ -157,9 +157,8 @@ def goes(date, hours, band, extent, factor):
 
     # Extract the timestamps as fractional days
     time_array = data.t.values
-    seconds_in_day = 24 * 60 * 60
     seconds_since_midnight = (time_array - time_array.astype('datetime64[D]')) / np.timedelta64(1, 's')
-    T = torch.tensor(seconds_since_midnight / seconds_in_day, dtype=torch.float32)
+    T = torch.tensor(seconds_since_midnight, dtype=torch.float32)
 
     # Convert GOES x, y into Lambert-projected coordinates
     lonlat_full = calculate_degrees_goes(data_full)
@@ -260,5 +259,6 @@ def goes(date, hours, band, extent, factor):
     data = model.data(T, XY, Z, XYP_UV, XY_full, Z_full)
     data.extent = extent
     data.date = date
+    data.minutes = minutes
     data.level = band
     return data

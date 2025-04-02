@@ -38,7 +38,7 @@ def generate_time_ranges(date, minutes, start_time="00:00", end_time="23:59"):
     return time_list
 
 
-def generate_dates(n):
+def generate_dates(n, month = 1):
     """
     Generate a list of `n` random dates as strings (YYYY-MM-DD) within the range
     2024-01-01 to 2024-12-30.
@@ -50,8 +50,8 @@ def generate_dates(n):
         list of str: Randomly shuffled dates of length `n`.
                      Format: "YYYY-MM-DD".
     """
-    start_date = date(2024, 6, 1)
-    end_date = date(2024, 6, 30)
+    start_date = date(2024, month, 1)
+    end_date = date(2024, month, 30)
 
     all_dates = [
         (start_date + timedelta(days=i)).strftime("%Y-%m-%d")
@@ -205,3 +205,38 @@ def rmse_V(data, scale=1, mag=1):
     mean_rmse = torch.stack(errors).mean()
     return mean_rmse
 
+
+
+def rmse_datas(data1, data2, t, scale=1, mag=1):
+
+    XY = data1.XY
+    n_points = XY.shape[0]
+
+    vel1 = ode.Vel_hat(data1)
+    vel2 = ode.Vel_hat(data2)
+    UV1 = torch.zeros((1, n_points, 2))
+    UV2 = torch.zeros((1, n_points, 2))
+    n_frames = 1
+    for frame in range(n_frames):
+        UV1[frame] = vel1(t, XY) * scale * mag
+        UV1[frame] = vel2(t, XY) * scale * mag
+        
+
+    XY_UV1 = [torch.cat((XY, UV1[frame]), dim=-1).detach() for frame in range(n_frames)]
+    XY_UV2 = [torch.cat((XY, UV2[frame]), dim=-1).detach() for frame in range(n_frames)]
+
+
+    errors = []
+    for i in range(n_frames):
+        U1 = XY_UV1[i][:, 2]
+        U2 = XY_UV2[i][:, 3]
+        V1 = XY_UV1[i][:, 2]
+        V2 = XY_UV2[i][:, 3]
+
+        mse_U = torch.mean((U1 - U2) ** 2)
+        mse_V = torch.mean((V1 - V2) ** 2)
+        rmse_val = torch.sqrt(mse_U + mse_V)
+        errors.append(rmse_val)
+
+    mean_rmse = torch.stack(errors).mean()
+    return mean_rmse

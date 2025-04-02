@@ -8,18 +8,12 @@ import pickle
 # Add the parent directory to Python's import path
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-import get_data
-from main import model, tools
+import generate_data
 
 # Parameters
-BANDS = ["CMI_C08"]
-EXTENT = [-85.7, -78, 30.6, 34.8]
-#[-85.7, -81, 30.6, 34.8]
-DATES = ["2024-06-21"] 
-#+ ["2024-12-25"] + tools.generate_dates(2, month=3) + tools.generate_dates(2, month=6)
-HOURS = 4
-MINUTES = [15, 60]
-FACTOR = 4
+temporal_lenghscales = [1.0]
+zonal_lenghscales = [0.2]
+meridional_lenghscales = [0.2]
 FILE_PATH = 'datas/datas_pre.pkl'
 
 # Ensure the output directory exists
@@ -28,22 +22,20 @@ os.makedirs(os.path.dirname(FILE_PATH), exist_ok=True)
 # Create a parameter list
 params_list = [
     {
-        "date": date,
-        "band": band,
-        "hours": HOURS,
-        "extent": EXTENT,
-        "factor": FACTOR,
-        "minutes": minute
+        "l1": l1,
+        "l2": l2,
+        "l3": l3,
+
     }
-    for date in DATES
-    for band in BANDS
-    for minute in MINUTES
+    for l1 in temporal_lenghscales
+    for l2 in zonal_lenghscales
+    for l3 in meridional_lenghscales
 ]
 
 datas = []
 i = 0
 for params in params_list:
-    data = get_data.goes(**params)
+    data = generate_data.gyre(**params)
     data.id = i
     i += 1
     datas.append(data)

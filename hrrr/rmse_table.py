@@ -25,11 +25,11 @@ for data in datas_fit:
     row = [
         data.level,
         round(tools.rmse(data, mag=0).item(), 2),
-        round(tools.rmse(data, scale=1/86400).item(), 2),
+        round(tools.rmse(data).item(), 2),
         round(tools.rmse_U(data, mag = 0).item(), 2),
-        round(tools.rmse_U(data, scale=1/86400).item(), 2),
+        round(tools.rmse_U(data).item(), 2),
         round(tools.rmse_V(data, mag = 0).item(), 2),
-        round(tools.rmse_V(data, scale=1/86400).item(), 2)
+        round(tools.rmse_V(data).item(), 2)
     ]
     grouped_data[data.date].append(row)
 

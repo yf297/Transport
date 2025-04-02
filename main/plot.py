@@ -111,7 +111,7 @@ def observations(XY, Z, extent=None, frame=0, gif=False):
 
 
 
-def velocities(XY_UV, extent, frame=0, color="red", gif=False):
+def velocities(XY_UV, extent, scale = 1, frame=0, color="red", gif=False):
     """
     Creates either a static quiver plot or an animated GIF of velocity fields.
 
@@ -160,7 +160,7 @@ def velocities(XY_UV, extent, frame=0, color="red", gif=False):
 
             # Initialize the quiver object with the first frame.
             X0, Y0, U0, V0 = XY_UV[0].T
-            q = ax.quiver(X0, Y0, U0, V0, angles='xy', scale_units='xy', color=color)
+            q = ax.quiver(X0, Y0, U0, V0, angles='xy', scale_units='xy', scale = scale, color=color)
 
             def update(frame_i):
                 X, Y, U, V = XY_UV[frame_i].T
@@ -175,7 +175,7 @@ def velocities(XY_UV, extent, frame=0, color="red", gif=False):
             ax.set_aspect("equal")
 
             X0, Y0, U0, V0 = XY_UV[0].T
-            q = ax.quiver(X0, Y0, U0, V0, angles='xy', scale_units='xy', color=color)
+            q = ax.quiver(X0, Y0, U0, V0, angles='xy', scale_units='xy', scale = scale, color=color)
 
             def update(frame_i):
                 X, Y, U, V = XY_UV[frame_i].T
@@ -205,7 +205,7 @@ def velocities(XY_UV, extent, frame=0, color="red", gif=False):
             ax.gridlines(draw_labels=True)
 
             X0, Y0, U0, V0 = XY_UV[frame].T
-            ax.quiver(X0, Y0, U0, V0, angles='xy', scale_units='xy', color=color)
+            ax.quiver(X0, Y0, U0, V0, angles='xy', scale_units='xy', scale = scale, color=color)
             fig.tight_layout()
             return fig
         else:
@@ -213,6 +213,6 @@ def velocities(XY_UV, extent, frame=0, color="red", gif=False):
             ax = fig.add_subplot(1, 1, 1)
             ax.set_aspect("equal")
             X0, Y0, U0, V0 = XY_UV[frame].T
-            ax.quiver(X0, Y0, U0, V0, angles='xy', scale_units='xy', color=color)
+            ax.quiver(X0, Y0, U0, V0, angles='xy', scale_units='xy', scale = scale, color=color)
             fig.tight_layout()
             return fig

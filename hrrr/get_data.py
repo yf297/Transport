@@ -67,14 +67,13 @@ def hrrr(date, level, hours, extent, factor):
     # Prepare the list of file paths for each forecast hour
     paths = []
 
-
     # Download HRRR files for each forecast hour
-    for i in range(hours):
+    for i in range(0, hours + 1):
         paths.append(Herbie(date, model="hrrr", fxx=i).download(level))
 
     # Process all downloaded files and concatenate along the 'time' dimension
     data = xr.concat(
-        [process_hrrr(paths[i], i) for i in range(hours)], 
+        [process_hrrr(paths[i], i) for i in range(0, hours + 1)], 
         dim='time'
     )
 
@@ -95,7 +94,7 @@ def hrrr(date, level, hours, extent, factor):
 
     # Transform the extent bounds from lat/lon to Lambert x/y
     r = projections.Lambert.transform_point(extent[1], extent[3], projections.Geodetic)[0]
-    l =  projections.Lambert.transform_point(extent[0], extent[3], projections.Geodetic)[0]
+    l = projections.Lambert.transform_point(extent[0], extent[3], projections.Geodetic)[0]
     u = projections.Lambert.transform_point(extent[1], extent[3], projections.Geodetic)[1]
     d = projections.Lambert.transform_point(extent[0], extent[2], projections.Geodetic)[1]
     
@@ -103,9 +102,8 @@ def hrrr(date, level, hours, extent, factor):
     data_full = data.sel(x=slice(l, r), y=slice(d, u))
     data = data_full.isel(y=slice(None, None, factor), x=slice(None, None, factor))
     
-    # Extract temperature (in K), convert to °C, and reshape
-    Z_full = torch.tensor(data_full.dpt.values, dtype=torch.float32).reshape(hours, -1) - 273.15
-    Z = torch.tensor(data.dpt.values, dtype=torch.float32).reshape(hours, -1) - 273.15
+    Z_full = torch.tensor(data_full.dpt.values, dtype=torch.float32).reshape(hours + 1, -1) 
+    Z = torch.tensor(data.dpt.values, dtype=torch.float32).reshape(hours + 1, -1)
 
     # Get the final XY coordinates
     XY_full = torch.tensor(
@@ -126,8 +124,7 @@ def hrrr(date, level, hours, extent, factor):
         dtype=torch.float32
     ).reshape(-1, 2)
 
-    # Create a 1D time tensor from 0 to hours/24
-    T = torch.linspace(0, hours / 24, hours)
+    T = torch.linspace(0, hours * 3600, hours + 1)
     
     level_num = float(level.split()[0])  # Takes the first part (e.g., "700" from "700 mb")
     P = torch.full((XY.shape[0],1), level_num, dtype=torch.float32)
@@ -136,8 +133,8 @@ def hrrr(date, level, hours, extent, factor):
     XYP_UV = [
         torch.cat([
             XY, P,
-            torch.tensor(data.u.values.reshape(hours, -1, 1)[i]),
-            torch.tensor(data.v.values.reshape(hours, -1, 1)[i])
+            torch.tensor(data.u.values.reshape(hours + 1, -1, 1)[i]),
+            torch.tensor(data.v.values.reshape(hours + 1, -1, 1)[i])
         ], dim=-1)
         for i in range(len(T))
     ]
