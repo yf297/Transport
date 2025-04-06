@@ -22,32 +22,30 @@ def vel(t, xy, A=1.0, omega= 2 * 3.14159, epsilon=0.25):
 
         return torch.stack([u, v], dim=-1)/7.5
 
-def gyre(l = -1,r = 1,
-         u = 1,d = -1, 
+def gyre(l = -1, r = 1,
+         u = 1, d = -1, 
          k1 = 50, k2 = 50,
          n = 5,
          l1 = 1.0, l2 = 1.0, l3 = 1.0):
     
     x = torch.linspace(l,r,k1)
-    y = torch.linspace(d,u,k2)
+    y = torch.linspace(u,d,k2)
     t = torch.linspace(0,1,n)
 
     X,Y = torch.meshgrid(x,y,indexing='xy')
     XY = torch.stack([X,Y], dim = -1).reshape(-1,2)
     T = t
    
-
-    kernel = gpytorch.kernels.ScaleKernel(
-        gpytorch.kernels.MaternKernel(nu = 5/2, ard_num_dims = 3))
-    likelihood = gpytorch.likelihoods.GaussianLikelihood()
-    likelihood.noise = 0.01
-    hypers = {
-        'base_kernel.lengthscale': torch.tensor([l1, l2, l3]),
-        'outputscale': torch.tensor(1),
-        }
-    kernel.initialize(**hypers);
+    T_repeated = T.repeat_interleave(XY.shape[0]) 
+    XY_tiled = XY.repeat(T.shape[0], 1)  
+    TXY = torch.cat([T_repeated.unsqueeze(1), XY_tiled], dim=1)
     flow = ode.Flow(vel)
-    gp = model.GP(kernel, likelihood)
-    Z = simulate.observations(gp, flow, T, XY)
-    data = model.data(T,XY,Z)
+    spaceTimeKernel = model.SpaceTimeKernel(l0 = 2, l1 = 0.1, l2 = 0.1)
+    gpFlow = model.GPFlow(spaceTimeKernel, flow)
+    gpFlow.eval();  
+    with gpytorch.settings.prior_mode(True):
+        Z = gpFlow(TXY ).sample()
+    Z = Z.reshape(T.shape[0], -1)
+    
+    data = model.data(T,XY,Z, grid_size = 1, k0 = 0, k1 = 1)
     return data

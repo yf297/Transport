@@ -15,11 +15,11 @@ from main import model, tools
 LEVELS = ["500 mb"]
 EXTENT = [-85.7, -78, 30.6, 34.8]
 #[-85.7, -81, 30.6, 34.8]
-DATES =  ["2024-06-21"] +  ["2024-09-18"] + ["2024-12-25"]
+DATES =  ["2024-09-18"] 
+#+  ["2024-09-18"] + ["2024-12-25"]
 #+ tools.generate_dates(2, month=6)
 #["2024-06-21"] ["2024-09-18"]  + ["2024-12-25"] tools.generate_dates(2, month=3) + tools.generate_dates(2, month=6)
-HOURS = 6
-FACTOR = 3
+HOURS = 4
 FILE_PATH = 'datas/datas_pre.pkl'
 
 # Ensure the output directory exists
@@ -31,8 +31,7 @@ params_list = [
         "date": date,
         "level": level,
         "hours": HOURS,
-        "extent": EXTENT,
-        "factor": FACTOR
+        "extent": EXTENT
     }
     for date in DATES
     for level in LEVELS

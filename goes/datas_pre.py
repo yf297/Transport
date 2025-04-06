@@ -17,9 +17,8 @@ EXTENT = [-85.7, -78, 30.6, 34.8]
 #[-85.7, -81, 30.6, 34.8]
 DATES = ["2024-06-21"] 
 #+ ["2024-12-25"] + tools.generate_dates(2, month=3) + tools.generate_dates(2, month=6)
-HOURS = 4
+HOURS = 3
 MINUTES = [15, 60]
-FACTOR = 4
 FILE_PATH = 'datas/datas_pre.pkl'
 
 # Ensure the output directory exists
@@ -32,7 +31,6 @@ params_list = [
         "band": band,
         "hours": HOURS,
         "extent": EXTENT,
-        "factor": FACTOR,
         "minutes": minute
     }
     for date in DATES

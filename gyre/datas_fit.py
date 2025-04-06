@@ -47,19 +47,14 @@ if not new_datas:
 else:
     i = 1
     for data in new_datas:
-        data.flow = net.Flow(L=4)
-
         print(i)
         i += 1
         gc.collect()
         torch.cuda.empty_cache()
         
-        indices_full = torch.randperm(data.m)
         start_time = time.time()
-        
-        optimize.fit(data, indices_full, num_epochs=200, fix_t=False, num_batches = 2)
+        optimize.fit(data, num_epochs=200)
         end_time = time.time()
-
         data.time = end_time - start_time
 
     # Extend existing fits with the newly fitted data

@@ -7,26 +7,6 @@ import torch
 from . import ode
 
 def generate_time_ranges(date, minutes, start_time="00:00", end_time="23:59"):
-    """
-    Generate a list of datetime objects at a fixed interval (in minutes) 
-    between a given start and end time for a particular date.
-
-    Parameters:
-    -----------
-    date : str
-        Date string in 'YYYY-MM-DD' format (e.g., '2023-01-01').
-    minutes : int
-        Interval in minutes between each generated time.
-    start_time : str, optional
-        Start time in 'HH:MM' format (default '00:00').
-    end_time : str, optional
-        End time in 'HH:MM' format (default '23:59').
-
-    Returns:
-    --------
-    time_list : list of datetime
-        A list of datetime objects from start to end at the specified interval.
-    """
 
     start = datetime.strptime(date + " " + start_time, "%Y-%m-%d %H:%M")
     end = datetime.strptime(date + " " + end_time, "%Y-%m-%d %H:%M")
@@ -39,17 +19,7 @@ def generate_time_ranges(date, minutes, start_time="00:00", end_time="23:59"):
 
 
 def generate_dates(n, month = 1):
-    """
-    Generate a list of `n` random dates as strings (YYYY-MM-DD) within the range
-    2024-01-01 to 2024-12-30.
 
-    Args:
-        n (int): Number of dates to return.
-
-    Returns:
-        list of str: Randomly shuffled dates of length `n`.
-                     Format: "YYYY-MM-DD".
-    """
     start_date = date(2024, month, 1)
     end_date = date(2024, month, 30)
 
@@ -62,25 +32,57 @@ def generate_dates(n, month = 1):
     return all_dates[:n]
 
 
+def partition_into_coarse_grids(grid, k):
+    coarse_grids = []
+
+    for i in range(k):
+        for j in range(k):
+            coarse = grid[i::k, j::k, :]  
+            coarse_grids.append(coarse)
+
+    return coarse_grids
+        
+class NormalizeTime:
+    def __init__(self, T):
+        self.max = T.max()
+
+    def __call__(self, t):
+        return t / self.max
+
+
+class NormalizeSpace:
+    def __init__(self, XY):
+        self.min = XY.min(dim=0).values
+        self.max = XY.max(dim=0).values
+
+    def __call__(self, xy):
+        return 2 * (xy - self.min) / (self.max - self.min) - 1
+
+
+class NormalizeObs:
+    def __init__(self, Z):
+        flat = Z.reshape(-1)
+        self.mean = flat.mean()
+        self.std = flat.std()
+
+    def __call__(self, z):
+        return (z - self.mean) / self.std
+
+
+def rescale_temporal_lengthscale(T, temporal_lengthscale):
+    return temporal_lengthscale *T.max()
+
+def rescale_spatial_lengthscales(XY, spatial_lengthscales):
+    min = XY.min(dim=0).values
+    max = XY.max(dim=0).values
+    return spatial_lengthscales * ( (min - max) / 2)
+
+def rescale_variance(Z, variance_normalized):
+    std_Z = Z.reshape(-1).std()
+    return variance_normalized * std_Z**2
+
 def rmse(data, scale=1, mag=1):
-    """
-    Compute the overall RMSE (root mean squared error) in both U and V velocity
-    components, compared to ground-truth data.
 
-    Args:
-        data: An object containing:
-              - data.T: Time steps (tensor of shape [n_frames]).
-              - data.XY: Spatial coordinates (tensor of shape [n_points, 2]).
-              - data.XYP_UV: Ground-truth data (list of tensors, each containing
-                             columns [X, Y, P, U, V], or similar).
-              - data.n: Number of data items to evaluate (int).
-              - Possibly other attributes used by `ode.Vel_hat`.
-        scale (float, optional): Scaling factor for predicted velocities. Defaults to 1.
-        mag (float, optional): Additional multiplier for predicted velocities. Defaults to 1.
-
-    Returns:
-        torch.Tensor: Mean RMSE (scalar) across all frames and data items.
-    """
     T = data.T
     XY = data.XY
     n_frames = T.shape[0]
@@ -115,28 +117,12 @@ def rmse(data, scale=1, mag=1):
 
 
 def rmse_U(data, scale=1, mag=1):
-    """
-    Compute the RMSE in the U velocity component only.
 
-    Args:
-        data: An object containing:
-              - data.T: Time steps (tensor of shape [n_frames]).
-              - data.XY: Spatial coordinates (tensor of shape [n_points, 2]).
-              - data.XYP_UV: Ground-truth data (list of tensors, each containing
-                             columns [X, Y, P, U, V], or similar).
-              - data.n: Number of data items to evaluate (int).
-        scale (float, optional): Scaling factor for predicted U. Defaults to 1.
-        mag (float, optional): Additional multiplier for predicted U. Defaults to 1.
-
-    Returns:
-        torch.Tensor: Mean RMSE (scalar) across all frames/items for the U component.
-    """
     T = data.T
     XY = data.XY
     n_frames = T.shape[0]
     n_points = XY.shape[0]
 
-    # Compute predicted velocities for each frame
     vel = ode.Vel_hat(data)
     UV = torch.zeros((n_frames, n_points, 2))
     for frame in range(n_frames):
@@ -161,22 +147,7 @@ def rmse_U(data, scale=1, mag=1):
 
 
 def rmse_V(data, scale=1, mag=1):
-    """
-    Compute the RMSE in the V velocity component only.
 
-    Args:
-        data: An object containing:
-              - data.T: Time steps (tensor of shape [n_frames]).
-              - data.XY: Spatial coordinates (tensor of shape [n_points, 2]).
-              - data.XYP_UV: Ground-truth data (list of tensors, each containing
-                             columns [X, Y, P, U, V], or similar).
-              - data.n: Number of data items to evaluate (int).
-        scale (float, optional): Scaling factor for predicted V. Defaults to 1.
-        mag (float, optional): Additional multiplier for predicted V. Defaults to 1.
-
-    Returns:
-        torch.Tensor: Mean RMSE (scalar) across all frames/items for the V component.
-    """
     T = data.T
     XY = data.XY
     n_frames = T.shape[0]
@@ -240,3 +211,4 @@ def rmse_datas(data1, data2, t, scale=1, mag=1):
 
     mean_rmse = torch.stack(errors).mean()
     return mean_rmse
+
