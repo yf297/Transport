@@ -1,0 +1,12 @@
+\begin{table}[ht]
+\centering
+\begin{tabular}{llrrrrrr}
+\hline
+{Date} & {Level} & $RMS & $RMSE$ & RMS U$ & RMSE U & $RMS$  & $RMSE V$\\
+\hline
+\multirow{1}{*}{2024-09-18} & CMI_C08 & 11.86 & 4.98 & 9.46 & 3.78 & 7.12 & 3.23 \\
+\hline
+\end{tabular}
+\caption{}
+\label{tab:cov_est}
+\end{table}
