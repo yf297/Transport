@@ -85,3 +85,16 @@ class ScaleFlow:
         XY: torch.Tensor = self.nl(TXY[..., 1:])
         TXY: torch.Tensor = torch.cat([T, XY], dim=-1)
         return self.nli(self.flow(TXY))
+    
+    
+def rescale_temporal_lengthscale(T, temporal_lengthscale):
+    return temporal_lengthscale *T.max()
+
+def rescale_spatial_lengthscales(XY, spatial_lengthscales):
+    min = XY.min(dim=0).values
+    max = XY.max(dim=0).values
+    return spatial_lengthscales * ( (max - min) / 2)
+
+def rescale_variance(Z, variance_normalized):
+    std_Z = Z.reshape(-1).std()
+    return variance_normalized * std_Z**2

@@ -1,16 +1,15 @@
 import torch
-from torch import Tensor
 from typing import Tuple
 
 class VecchiaBlocks:
-    def __init__(self, T: Tensor, XY: Tensor, Z: Tensor):
+    def __init__(self, T: torch.Tensor, XY: torch.Tensor, Z: torch.Tensor):
         self.T  = T
         self.XY = XY
         self.Z  = Z
 
     def prediction(self, i: int, 
-                   idx: Tensor
-    ) -> Tuple[Tensor, Tensor]:
+                   idx: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         T = self.T[i]                 
         XY = self.XY[idx,:]              
         M  = XY.size(0)
@@ -22,9 +21,9 @@ class VecchiaBlocks:
     def conditioning(
         self,
         i: int,
-        idx: Tensor,
+        idx: torch.Tensor,
         nn: int
-    ) -> Tuple[Tensor, Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         j       = max(0, i - nn)
         T   = self.T[j:i]             
         XY  = self.XY[idx,:]           

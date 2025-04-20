@@ -1,27 +1,32 @@
 import torch
-from typing import Any, Optional, Union
-from matplotlib.figure import Figure
-from matplotlib.animation import FuncAnimation
-from utils.plot import plot_scalar_field
+import matplotlib.figure
+import matplotlib.animation
+import utils.plot
+import fields.coord_field
+from typing import Union
 
-class ScalarField:
+class DiscreteScalarField:
     def __init__(
         self,
-        times: torch.Tensor,             
-        locations: torch.Tensor,         
-        scalar: torch.Tensor            
-    ) -> None:
-        self.times = times
-        self.locations = locations
+        coord_field: fields.coord_field.DiscreteCoordField,
+        scalar: torch.Tensor,
+    ):
+        self.coord_field = coord_field
         self.scalar = scalar
-        self.map: Optional[Any] = None
 
     def plot(
         self,
         factor: int = 1,
         frame: int = 0,
         gif: bool = False
-    ) -> Union[Figure, FuncAnimation]:
+    ) -> Union[matplotlib.figure.Figure, matplotlib.animation.FuncAnimation]:
         fac = max(1, factor)
-        scalar = self.scalar[:, ::fac, ::fac]  
-        return plot_scalar_field(scalar, self.map, frame, gif)
+        scalar = self.scalar[:, ::fac, ::fac]
+        
+        return utils.plot.scalar_field(
+            scalar=scalar,
+            proj=self.coord_field.proj,
+            extent=self.coord_field.extent,
+            frame=frame,
+            gif=gif,
+        )
