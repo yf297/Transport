@@ -8,14 +8,24 @@ class VecchiaBlocks:
         self.Z  = Z
 
     def prediction(self, i: int, 
-                   idx: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        T = self.T[i]                 
-        XY = self.XY[idx,:]              
+                   idx: torch.Tensor, 
+                   exact: bool = False
+    ) -> Tuple[torch.Tensor, torch.Tensor]:      
+        XY = self.XY[idx,:]      
+        Z =  self.Z[:, idx]  
         M  = XY.size(0)
         
-        TXY_pred = torch.cat([T.repeat(M, 1), XY], dim=-1) 
-        Z_pred = self.Z[i, idx]
+        if exact:
+            T = self.T         
+            TXY_pred = torch.cat([
+            T.repeat_interleave(XY.size(0)).unsqueeze(1),
+            XY.repeat(T.size(0), 1)
+            ], dim=-1)
+            Z_pred = Z.reshape(-1)
+        else:
+            T = self.T[i]           
+            TXY_pred = torch.cat([T.repeat(M, 1), XY], dim=-1) 
+            Z_pred = Z[i,:]
         return TXY_pred, Z_pred
 
     def conditioning(

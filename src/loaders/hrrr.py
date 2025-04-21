@@ -56,7 +56,10 @@ def _subset_dataset(
     l = Lambert.transform_point(xmin, ymax, PlateCarree)[0]
     u = Lambert.transform_point(xmax, ymax, PlateCarree)[1]
     d = Lambert.transform_point(xmin, ymin, PlateCarree)[1]
-    return ds.sel(x=slice(l, r), y=slice(u, d)), (l, r, d, u)
+    ds = ds.sel(x=slice(l, r), y=slice(u, d))
+    ds = ds.isel(x=slice(None, None, 4),
+                             y=slice(None, None, 4))
+    return ds, (l, r, d, u)
 
 
 def _compute_locations(
@@ -70,7 +73,7 @@ def _compute_locations(
 def _compute_scalar(
     ds: xr.Dataset
 ) -> torch.Tensor:
-    return torch.tensor(ds.dpt.values.copy(), dtype=torch.float32)
+    return torch.tensor(ds.dpt.values.copy(), dtype=torch.float32) - 273.15
 
 def _compute_vector(ds: xr.Dataset) -> torch.Tensor:
     u = torch.tensor(ds.u.values.copy(), dtype=torch.float32)

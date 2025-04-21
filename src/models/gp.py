@@ -18,7 +18,7 @@ class GP(gpytorch.models.ExactGP):
             gpytorch.kernels.keops.MaternKernel(nu=2.5, ard_num_dims=3)
         )
         self.covar_module.base_kernel.initialize(
-            lengthscale=torch.tensor([6.0, 0.1, 0.1]))
+            lengthscale=torch.tensor([6.0, 0.3, 0.3]))
 
     def forward(self, 
                 TXY: torch.Tensor

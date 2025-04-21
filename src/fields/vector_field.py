@@ -81,7 +81,10 @@ class ContinuousVectorField:
         self,
         scalar_field: fields.scalar_field.DiscreteScalarField,
         epochs: int = 50, 
-        sample_size: int = 1000) -> None:
+        sample_size: int = 1000,
+        nn: int = 1,
+        exact: bool = False,
+        ) -> None:
     
         nt = train.scale.NormalizeTime(scalar_field.coord_field.times)
         nl = train.scale.NormalizeLocation(scalar_field.coord_field.locations.reshape(-1, 2))
@@ -94,8 +97,8 @@ class ContinuousVectorField:
         
         flow = models.neural_flow.NeuralFlow()
         gp = models.gp.GP(flow)
-
-        train.optim.mle(nt(T), nl(XY), ns(Z), gp, epochs, sample_size, 1)
+        #train.optim.mle0(nt(T), nl(XY), ns(Z), gp, epochs, sample_size)
+        train.optim.mle(nt(T), nl(XY), ns(Z), gp, epochs, sample_size, nn, exact)
 
         def func0(TXY):
             Jacobians = torch.vmap(torch.func.jacrev(train.scale.ScaleFlow(gp.flow,nt,nl,nli)))(TXY)

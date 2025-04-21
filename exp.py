@@ -3,6 +3,8 @@ import pathlib
 import warnings
 warnings.filterwarnings('ignore')
 sys.path.insert(0, str(pathlib.Path.cwd()/"src"))
+import random, calendar
+from datetime import datetime
 import torch 
 import numpy as np
 import random
@@ -16,10 +18,10 @@ from loaders.hrrr import discrete_scalar_field, discrete_vector_field
 from fields.vector_field import ContinuousVectorField
 
 def run_experiment(date: str, level: int):
-    dsf = discrete_scalar_field(date, hours=4, level=f"{level} mb", extent=(-92, -74, 26, 40))
+    dsf = discrete_scalar_field(date, hours=4, level=f"{level} mb", extent=(-92, -74, 26, 36.3))
     cvf = ContinuousVectorField()
-    cvf.train(dsf, epochs=100, sample_size=2000)
-    dvf = discrete_vector_field(date, hours=4, level=f"{level} mb", extent=(-92, -74, 26, 40))
+    cvf.train(dsf, epochs=50, sample_size=4000)
+    dvf = discrete_vector_field(date, hours=4, level=f"{level} mb", extent=(-92, -74, 26, 36.3))
     return {
         "date": date,
         "level": level,
@@ -31,7 +33,13 @@ def run_experiment(date: str, level: int):
         "RMSE":   float(cvf.RMSE(dvf))
     }
 
-dates  = ["2024-03-22", "2024-06-21", "2024-09-18", "2024-12-25"]
+ms  = ["2024-03-28", "2024-12-25"]
+dates = [
+    (d := datetime.fromisoformat(m)).replace(
+        day=random.randint(1, calendar.monthrange(d.year, d.month)[1])
+    ).strftime("%Y-%m-%d")
+    for m in ms
+]
 levels = [500, 700]
 
 results = []
