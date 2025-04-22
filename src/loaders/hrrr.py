@@ -57,8 +57,6 @@ def _subset_dataset(
     u = Lambert.transform_point(xmax, ymax, PlateCarree)[1]
     d = Lambert.transform_point(xmin, ymin, PlateCarree)[1]
     ds = ds.sel(x=slice(l, r), y=slice(u, d))
-    ds = ds.isel(x=slice(None, None, 4),
-                             y=slice(None, None, 4))
     return ds, (l, r, d, u)
 
 

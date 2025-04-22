@@ -81,9 +81,8 @@ class ContinuousVectorField:
         self,
         scalar_field: fields.scalar_field.DiscreteScalarField,
         epochs: int = 50, 
-        sample_size: int = 1000,
         nn: int = 1,
-        exact: bool = False,
+        stride: int = 4
         ) -> None:
     
         nt = train.scale.NormalizeTime(scalar_field.coord_field.times)
@@ -92,13 +91,12 @@ class ContinuousVectorField:
         ns = train.scale.NormalizeScalar(scalar_field.scalar.reshape(scalar_field.coord_field.times.size(0), -1))
     
         T = scalar_field.coord_field.times
-        XY = scalar_field.coord_field.locations.reshape(-1, 2)
-        Z = scalar_field.scalar.reshape(T.size(0), -1)
+        XY = scalar_field.coord_field.locations
+        Z = scalar_field.scalar
         
         flow = models.neural_flow.NeuralFlow()
         gp = models.gp.GP(flow)
-        #train.optim.mle0(nt(T), nl(XY), ns(Z), gp, epochs, sample_size)
-        train.optim.mle(nt(T), nl(XY), ns(Z), gp, epochs, sample_size, nn, exact)
+        train.optim.mle(nt(T), nl(XY), ns(Z), gp, epochs, nn, stride)
 
         def func0(TXY):
             Jacobians = torch.vmap(torch.func.jacrev(train.scale.ScaleFlow(gp.flow,nt,nl,nli)))(TXY)
@@ -119,19 +117,19 @@ class ContinuousVectorField:
             return func0(TXY).reshape(T.size(0), H, W, 2)
             
         self.func = func
-        self.sigma2 = train.scale.rescale_variance(Z, gp.covar_module.outputscale).item()
-        self.l0 = train.scale.rescale_temporal_lengthscale(T,gp.covar_module.base_kernel.lengthscale[0][0]).item()
-        self.l1 = train.scale.rescale_spatial_lengthscales(XY,gp.covar_module.base_kernel.lengthscale[0][1:])[0].item()
-        self.l2 = train.scale.rescale_spatial_lengthscales(XY,gp.covar_module.base_kernel.lengthscale[0][1:])[1].item()
+        self.sigma2 = train.scale.rescale_variance(scalar_field.scalar.reshape(scalar_field.coord_field.times.size(0), -1), gp.covar_module.outputscale).item()
+        self.l0 = train.scale.rescale_temporal_lengthscale(scalar_field.coord_field.times,gp.covar_module.base_kernel.lengthscale[0][0]).item()
+        self.l1 = train.scale.rescale_spatial_lengthscales(scalar_field.coord_field.locations.reshape(-1, 2),gp.covar_module.base_kernel.lengthscale[0][1:])[0].item()
+        self.l2 = train.scale.rescale_spatial_lengthscales(scalar_field.coord_field.locations.reshape(-1, 2),gp.covar_module.base_kernel.lengthscale[0][1:])[1].item()
 
     def RMSE(
         self,
-        vector_field: DiscreteVectorField
-    ) -> float:
+        vector_field: DiscreteVectorField,
+        frame: int ) -> float:
         locations = vector_field.coord_field.locations
-        times = vector_field.coord_field.times
+        times = vector_field.coord_field.times[frame:frame+1]
       
         vector1 = self.func(times, locations)
-        vector0 = vector_field.vector
+        vector0 = vector_field.vector[frame,:,:,:]
         
-        return torch.sqrt(((vector1 - vector0)**2).mean(dim=(1,2))).mean()
+        return round(torch.sqrt(((vector1 - vector0)**2).mean(dim=(1,2))).mean().item(), 2)

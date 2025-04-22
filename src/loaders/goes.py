@@ -53,6 +53,7 @@ def _subset_dataset(
     l = Geostationary.transform_point(xmin, ymax, PlateCarree)[0]
     u = Geostationary.transform_point(xmax, ymax, PlateCarree)[1]
     d = Geostationary.transform_point(xmin, ymin, PlateCarree)[1]
+    ds = ds.isel(x=slice(None, None, 3), y=slice(None, None, 3))
     return ds.sel(x=slice(l, r), y=slice(u, d)), (l, r, d, u)
 
 def _compute_locations(

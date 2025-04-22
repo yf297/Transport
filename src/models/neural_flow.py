@@ -6,7 +6,7 @@ class NeuralFlow(torch.nn.Module):
         depth: int = 3,
         width: int = 32,
         blocks: int = 3,
-        dropout: float = 0.0,
+        dropout: float = 0.8,
     ):
         super().__init__()
         self.dim        = dim
@@ -20,20 +20,20 @@ class NeuralFlow(torch.nn.Module):
         layers: list[torch.nn.Module] = []
 
         lin = torch.nn.Linear(self.dim + 1, self.width)
-        torch.nn.init.xavier_uniform_(lin.weight, gain=0.5)
+        torch.nn.init.xavier_uniform_(lin.weight, gain=0.8)
         layers.append(lin)
         layers.append(torch.nn.ReLU())
         layers.append(torch.nn.Dropout(self.dropout))
 
         for _ in range(self.depth - 1):
             lin = torch.nn.Linear(self.width, self.width)
-            torch.nn.init.xavier_uniform_(lin.weight, gain=0.5)
+            torch.nn.init.xavier_uniform_(lin.weight, gain=0.8)
             layers.append(lin)
             layers.append(torch.nn.ReLU())
             layers.append(torch.nn.Dropout(self.dropout))
 
         lin = torch.nn.Linear(self.width, self.dim)
-        torch.nn.init.constant_(lin.weight,0.0)
+        torch.nn.init.xavier_uniform_(lin.weight, gain=0.2)
         layers.append(lin)
         
         return torch.nn.Sequential(*layers)
@@ -46,15 +46,15 @@ class NeuralFlow(torch.nn.Module):
                 if i == 0:
                     w_sub = w[:, -2:]
                     norm = torch.linalg.matrix_norm(w_sub, ord=2)
-                    if norm > self.blocks + eps:
+                    if norm > 1 + eps:
                         with torch.no_grad():
-                            scale = (self.blocks) / (norm + eps)
+                            scale = 1 / (norm + eps)
                             module.weight.data[:, -2:].mul_(scale)
                 else:
                     norm = torch.linalg.matrix_norm(w, ord=2)
-                    if norm > self.blocks + eps:
+                    if norm > 1 + eps:
                         with torch.no_grad():
-                           scale = (self.blocks) / (norm + eps)
+                           scale = 1 / (norm + eps)
                            module.weight.data.mul_(scale)
                             
     def inspect_weights(self) -> list[float]:
@@ -80,4 +80,3 @@ class NeuralFlow(torch.nn.Module):
             TXY = torch.cat([T, XY], dim = -1)  
         return XY
     
-# ((1/self.blocks)**(self.depth+1))
