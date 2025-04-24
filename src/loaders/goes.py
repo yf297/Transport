@@ -53,7 +53,9 @@ def _subset_dataset(
     l = Geostationary.transform_point(xmin, ymax, PlateCarree)[0]
     u = Geostationary.transform_point(xmax, ymax, PlateCarree)[1]
     d = Geostationary.transform_point(xmin, ymin, PlateCarree)[1]
-    ds = ds.isel(x=slice(None, None, 3), y=slice(None, None, 3))
+    ds = ds.isel(x=slice(None, None, 2),
+                         y=slice(None, None, 2))
+
     return ds.sel(x=slice(l, r), y=slice(u, d)), (l, r, d, u)
 
 def _compute_locations(
@@ -96,3 +98,71 @@ def discrete_scalar_field(
     dsf = fields.scalar_field.DiscreteScalarField(dcf, scalar)
     return dsf
 
+
+def _download_wind_data(date: str, 
+                    time: str,
+                    band: int = 9
+    ) -> list[pathlib.Path]:
+    datetime = f"{date} {time}"
+    product = 'ABI-L2-DMWC'
+    if band == 8:
+        product = 'ABI-L2-DMWVC'
+    file = goes2go.data.goes_nearesttime(
+                attime=datetime,
+                satellite='goes16',
+                product=product,
+                bands=band,
+                return_as='filelist')["file"][0]
+    base = pathlib.Path.cwd().parents[0]
+    path = base / 'data' / file 
+    data = xr.open_dataset(path)
+    data = data.dropna(dim="nMeasures")
+    return data
+
+def _compute_wind_func( ds: xr.Dataset, 
+                            extent: Tuple[float, float, float, float]
+    ):
+
+
+    paths = _download_band_paths("01-01-25", "00:00", "00:05", 9)
+    dsb = _concat_datasets(paths)
+    Geostationary = dsb.metpy.parse_cf('CMI').metpy.cartopy_crs
+    
+    pc = ds.metpy.parse_cf('wind_speed').metpy.cartopy_crs
+    x = ds.lon.values
+    y = ds.lat.values
+    XY = Geostationary.transform_points(pc, x, y)[:,0:2]
+    XY = torch.tensor(XY, dtype=torch.float32)
+    xmin, xmax, ymin, ymax = extent
+    r = Geostationary.transform_point(xmax, ymax, pc)[0]
+    l = Geostationary.transform_point(xmin, ymax, pc)[0]
+    u = Geostationary.transform_point(xmax, ymax, pc)[1]
+    d = Geostationary.transform_point(xmin, ymin, pc)[1]
+    mask = (XY[:, 0] >= l) & (XY[:, 0] <= r) & (XY[:, 1] >= d) & (XY[:, 1] <= u)
+    XY = XY[mask]
+
+    wspd = ds.wind_speed.values
+    wdir = ds.wind_direction.values
+    wdir = np.deg2rad(wdir)  
+    u = torch.tensor(-wspd * np.sin(wdir)).unsqueeze(1)
+    v = torch.tensor(-wspd * np.cos(wdir)).unsqueeze(1)
+    UV = torch.cat([u, v], dim=-1)[mask]
+    
+    t = np.array([ds.time.values[0]])
+    T = torch.tensor((t - t.astype('datetime64[D]')) / np.timedelta64(1, 's'))
+    
+    return T, XY, UV
+    
+
+
+'''def discrete_vector_field(
+    date: str,
+    time: int,
+    band: int,
+    extent: Tuple[float, float, float, float]
+) -> fields.vector_field.DiscreteVectorField:
+    ds = _download_wind_data(date, time, band)
+    times, locations, vector, Geostationary, extent = _compute_wind_locations(ds, extent)
+    dcf = fields.coord_field.DiscreteCoordField(times, locations, Geostationary, extent)
+    dsf = fields.vector_field.DiscreteVectorField(dcf, vector)
+    return dsf'''

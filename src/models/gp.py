@@ -17,13 +17,12 @@ class GP(gpytorch.models.ExactGP):
         self.covar_module = gpytorch.kernels.ScaleKernel(
             gpytorch.kernels.keops.MaternKernel(nu=2.5, ard_num_dims=3)
         )
-        self.covar_module.base_kernel.initialize(
-            lengthscale=torch.tensor([6.0, 0.3, 0.3]))
 
     def forward(self, 
                 TXY: torch.Tensor
     ) -> gpytorch.distributions.MultivariateNormal:
         T = TXY[..., 0:1]
+        A = self.flow(TXY)
         TA = torch.cat([T, self.flow(TXY)], dim = -1)  
         mean_x = self.mean_module(TA)
         covar_x = self.covar_module(TA)

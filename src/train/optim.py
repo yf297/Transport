@@ -13,18 +13,18 @@ def mle(
     gp: gpytorch.models.ExactGP,
     epochs: int,
     nn: int, 
-    stride: int = 4
-)-> None:
+    k: int = 4,
+    size: int = 4
+    )-> None:
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     gp.to(device)
     gp.flow.to(device)
     gp.flow.train()
     gp.train()
     gp.likelihood.train()
-    
-    mll = gpytorch.mlls.ExactMarginalLogLikelihood(gp.likelihood, gp)
-    vecchia_blocks = train.vecchia.VecchiaBlocks(T, XY, Z, stride)
 
+    mll = gpytorch.mlls.ExactMarginalLogLikelihood(gp.likelihood, gp)
+    vecchia_blocks = train.vecchia.VecchiaBlocks(T, XY, Z)
 
     optimizer1 = torch.optim.Adam([
                             {"params": gp.flow.parameters(), "lr": 0.003},
@@ -34,23 +34,26 @@ def mle(
                             ])
     
     with gpytorch.settings.detach_test_caches(state=False),\
+        gpytorch.settings.max_preconditioner_size(100),\
         gpytorch.settings.fast_computations(log_prob=False, 
                                     covar_root_decomposition=False, 
                                     solves=False):
         
         for epoch in range(1, epochs + 1):
-            def compute_ll():
+            def compute_vecchia_ll():
                 gp.train()
                 gp.likelihood.train()
-                idx = random.randint(0, (stride**2)-1)
+                idx = torch.randperm(XY.size(0))[:size]                
                 TXY_pred, Z_pred = vecchia_blocks.prediction(i=0, idx=idx)
                 TXY_pred, Z_pred = TXY_pred.to(device), Z_pred.to(device)
             
                 gp.set_train_data(TXY_pred, Z_pred, strict=False)
                 output = gp(TXY_pred)
-                ll = -mll(output, Z_pred) /  T.size(0)
-
-                for i in range(1, T.size(0)):
+                ll = mll(output, Z_pred)
+                
+    
+                i_sub = torch.randperm(T.size(0))[:k]
+                for i in i_sub:             
                     TXY_pred, Z_pred = vecchia_blocks.prediction(i, idx)
                     TXY_pred, Z_pred = TXY_pred.to(device), Z_pred.to(device)
                 
@@ -64,28 +67,24 @@ def mle(
                     gp.eval()
                     gp.likelihood.eval()
                     output = gp(TXY_pred)
-                    ll += -mll(output, Z_pred) / T.size(0)
-                return ll
+                    ll += -mll(output, Z_pred)
+                return ll/(k+1)
             
 
             optimizer1.zero_grad()
-            ll = compute_ll()
+            ll = compute_vecchia_ll()
             ll.backward()
             optimizer1.step()
             
-            with torch.no_grad():
-                #gp.flow.project_weights()
+
+            if epoch % 1 == 0:
                 gp.flow.inspect_weights()
-            
-            ls = gp.covar_module.base_kernel.lengthscale.view(-1).tolist()
-            ls_str = ", ".join(f"{v:.2f}" for v in ls)
-            print(f"Epoch {epoch}/{epochs} — Avg NLL: {ll.item():.4f} — lengthscales: {ls_str}")
+                ls = gp.covar_module.base_kernel.lengthscale.view(-1).tolist()
+                ls_str = ", ".join(f"{v:.2f}" for v in ls)
+                print(f"Epoch {epoch}/{epochs} — Avg NLL: {ll.item():.4f} — lengthscales: {ls_str}")
     
                 
     gp.flow.eval()
     gp.eval()
     gp.likelihood.eval()
     gp.to("cpu")
-    del vecchia_blocks, mll, optimizer1
-    gc.collect()
-    torch.cuda.empty_cache()

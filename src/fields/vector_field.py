@@ -39,11 +39,13 @@ class DiscreteVectorField:
         )
         
     def RMS(
-        self 
+        self, 
+        frame: int
     ) -> float:
-        vector0 = self.vector
-        return torch.sqrt(((vector0)**2).mean(dim=(1,2))).mean()
-
+        locations = self.coord_field.locations
+        vector0 = self.vector[frame,:,:,:]
+        
+        return round(torch.sqrt( ((vector0[:,:,0])**2 + (vector0[:,:,1] )**2).mean() ).item(), 2)
 
 class ContinuousVectorField:
     def __init__(
@@ -51,7 +53,6 @@ class ContinuousVectorField:
         func: Optional[Callable[[torch.Tensor], torch.Tensor]] = None
     ):
         self.func = func
-       
     
     def plot(
         self,
@@ -82,21 +83,34 @@ class ContinuousVectorField:
         scalar_field: fields.scalar_field.DiscreteScalarField,
         epochs: int = 50, 
         nn: int = 1,
-        stride: int = 4
+        k: int = 4,
+        size: int = 1000 
         ) -> None:
     
-        nt = train.scale.NormalizeTime(scalar_field.coord_field.times)
-        nl = train.scale.NormalizeLocation(scalar_field.coord_field.locations.reshape(-1, 2))
-        nli = train.scale.NormalizeLocationInverse(scalar_field.coord_field.locations.reshape(-1, 2))
-        ns = train.scale.NormalizeScalar(scalar_field.scalar.reshape(scalar_field.coord_field.times.size(0), -1))
-    
         T = scalar_field.coord_field.times
-        XY = scalar_field.coord_field.locations
-        Z = scalar_field.scalar
-        
+        XY = scalar_field.coord_field.locations.reshape(-1, 2)
+        Z = scalar_field.scalar.reshape(T.size(0), -1)
+       
+        nt = train.scale.NormalizeTime(T)
+        nl = train.scale.NormalizeLocation(XY)
+        nli = train.scale.NormalizeLocationInverse(XY)
+        ns = train.scale.NormalizeScalar(Z)
+    
         flow = models.neural_flow.NeuralFlow()
         gp = models.gp.GP(flow)
-        train.optim.mle(nt(T), nl(XY), ns(Z), gp, epochs, nn, stride)
+        
+        ell_phys = 100e3
+        tau_phys = 24*3600     
+        ls = nl.scale   
+        ts = nt.scale
+
+        ell_x = ell_phys / ls
+        ell_y = ell_phys / ls
+        ell_t = tau_phys / ts
+        #gp.likelihood.noise_covar.initialize(noise=torch.tensor(0.1))
+        gp.covar_module.base_kernel.initialize(
+            lengthscale=torch.tensor([ell_t, ell_x, ell_y]))
+        train.optim.mle(nt(T), nl(XY), ns(Z), gp, epochs, nn, k, size)
 
         def func0(TXY):
             Jacobians = torch.vmap(torch.func.jacrev(train.scale.ScaleFlow(gp.flow,nt,nl,nli)))(TXY)
@@ -117,10 +131,12 @@ class ContinuousVectorField:
             return func0(TXY).reshape(T.size(0), H, W, 2)
             
         self.func = func
-        self.sigma2 = train.scale.rescale_variance(scalar_field.scalar.reshape(scalar_field.coord_field.times.size(0), -1), gp.covar_module.outputscale).item()
-        self.l0 = train.scale.rescale_temporal_lengthscale(scalar_field.coord_field.times,gp.covar_module.base_kernel.lengthscale[0][0]).item()
-        self.l1 = train.scale.rescale_spatial_lengthscales(scalar_field.coord_field.locations.reshape(-1, 2),gp.covar_module.base_kernel.lengthscale[0][1:])[0].item()
-        self.l2 = train.scale.rescale_spatial_lengthscales(scalar_field.coord_field.locations.reshape(-1, 2),gp.covar_module.base_kernel.lengthscale[0][1:])[1].item()
+        self.sigma2 =  round(gp.covar_module.outputscale.item() * nt.scale.item(), 2)
+        self.l0  = round(gp.covar_module.base_kernel.lengthscale[0][0].item() * nt.scale.item(), 2)
+        self.l1 = round(gp.covar_module.base_kernel.lengthscale[0][1:][0].item() * nl.scale.item(), 2)
+        self.l2 = round(gp.covar_module.base_kernel.lengthscale[0][1:][1].item() * nl.scale.item(), 2)
+        self.tau2 =  round(gp.likelihood.noise.item(),2)
+        
 
     def RMSE(
         self,
@@ -129,7 +145,7 @@ class ContinuousVectorField:
         locations = vector_field.coord_field.locations
         times = vector_field.coord_field.times[frame:frame+1]
       
-        vector1 = self.func(times, locations)
+        vector1 = self.func(times, locations)[0,:,:,:]
         vector0 = vector_field.vector[frame,:,:,:]
         
-        return round(torch.sqrt(((vector1 - vector0)**2).mean(dim=(1,2))).mean().item(), 2)
+        return round(torch.sqrt( ((vector1[:,:,0] - vector0[:,:,0])**2 + (vector1[:,:,1] - vector0[:,:,1] )**2).mean() ).item(), 2)

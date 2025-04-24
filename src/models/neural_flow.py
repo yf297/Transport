@@ -1,82 +1,84 @@
 import torch
-class NeuralFlow(torch.nn.Module):
+import torch.nn as nn
+from torch.nn.utils import spectral_norm
+import numpy as np
+class SpacetimeBlock(nn.Module):
+    def __init__(
+        self,
+        dim: int,
+        width: int,
+        depth: int,
+        p0: float = 0.0,  
+        p: float = 0.0
+    ):
+        super().__init__()
+
+        # ── Spatial net h(x) → ℝ^width ───────────────────────────────
+        spatial_layers: list[nn.Module] = []
+        lin = nn.Linear(dim, width, bias = False)
+        nn.init.xavier_uniform_(lin.weight, gain = 0.8)
+        spatial_layers += [lin]
+        self.h_net = nn.Sequential(*spatial_layers)
+
+        # ── Time net s(t) → ℝ^width ─────────────────────────────────
+        time_layers: list[nn.Module] = []
+        lin = nn.Linear(1, width)
+        nn.init.constant_(lin.weight, 0)
+        time_layers += [lin]
+        self.s_net = nn.Sequential(*time_layers)
+
+        # ── Combine & project f(h+s) → ℝ^dim ─────────────────────────
+        f_layers: list[nn.Module] = []
+        f_layers += [nn.ReLU(), nn.Dropout(p0)]        
+        for _ in range(depth):
+            lin = nn.Linear(width, width)
+            nn.init.xavier_uniform_(lin.weight, gain = 0.8)
+            f_layers += [lin, nn.ReLU(), nn.Dropout(p)]
+        lin = nn.Linear(width, dim)
+        nn.init.xavier_uniform_(lin.weight, gain = 0.2)
+        f_layers += [lin]
+        self.f_net = nn.Sequential(*f_layers)
+
+    def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        h = self.h_net(x)         
+        s = self.s_net(t)        
+        z = h + s                 
+        return self.f_net(z)
+
+class NeuralFlow(nn.Module):
     def __init__(
         self,
         dim: int = 2,
-        depth: int = 3,
-        width: int = 32,
+        depth: int = 2,
+        width: int = 48,
         blocks: int = 3,
-        dropout: float = 0.8,
     ):
         super().__init__()
-        self.dim        = dim
-        self.depth      = depth
-        self.width      = width
-        self.blocks     = blocks
-        self.dropout    = dropout
-        self.blocks_net = torch.nn.ModuleList([self._make_block() for _ in range(blocks)])
-
-    def _make_block(self) -> torch.nn.Sequential:
-        layers: list[torch.nn.Module] = []
-
-        lin = torch.nn.Linear(self.dim + 1, self.width)
-        torch.nn.init.xavier_uniform_(lin.weight, gain=0.8)
-        layers.append(lin)
-        layers.append(torch.nn.ReLU())
-        layers.append(torch.nn.Dropout(self.dropout))
-
-        for _ in range(self.depth - 1):
-            lin = torch.nn.Linear(self.width, self.width)
-            torch.nn.init.xavier_uniform_(lin.weight, gain=0.8)
-            layers.append(lin)
-            layers.append(torch.nn.ReLU())
-            layers.append(torch.nn.Dropout(self.dropout))
-
-        lin = torch.nn.Linear(self.width, self.dim)
-        torch.nn.init.xavier_uniform_(lin.weight, gain=0.2)
-        layers.append(lin)
-        
-        return torch.nn.Sequential(*layers)
+        self.flow_blocks = nn.ModuleList([
+            SpacetimeBlock(dim, width, depth)
+            for _ in range(blocks)
+        ])
     
-    def project_weights(self, eps: float = 1e-12) -> None:
-        for net in self.blocks_net:
-            linear_layers = [m for m in net if isinstance(m, torch.nn.Linear)]
-            for i, module in enumerate(linear_layers):
-                w = module.weight
-                if i == 0:
-                    w_sub = w[:, -2:]
-                    norm = torch.linalg.matrix_norm(w_sub, ord=2)
-                    if norm > 1 + eps:
-                        with torch.no_grad():
-                            scale = 1 / (norm + eps)
-                            module.weight.data[:, -2:].mul_(scale)
-                else:
-                    norm = torch.linalg.matrix_norm(w, ord=2)
-                    if norm > 1 + eps:
-                        with torch.no_grad():
-                           scale = 1 / (norm + eps)
-                           module.weight.data.mul_(scale)
-                            
-    def inspect_weights(self) -> list[float]:
+    def inspect_weights(self):
         norms = []
-        for net in self.blocks_net:
-            net_norms = []
-            linear_layers = [m for m in net if isinstance(m, torch.nn.Linear)]
-            for i, module in enumerate(linear_layers):
-                weight = module.weight
-                if i == 0:
-                    weight = weight[:, -2:]  
-                net_norms.append(torch.linalg.matrix_norm(weight, ord=2))
-            norms.append(torch.prod(torch.stack(net_norms)).item())
+        for block in self.flow_blocks:
+            block_norms = []
+            for net in (block.h_net, block.f_net):
+                for module in net.modules():
+                    if isinstance(module, nn.Linear):
+                        block_norms.append(
+                            torch.linalg.matrix_norm(module.weight, ord=2)
+                        )
+            prod = torch.prod(torch.stack(block_norms)).item()
+            norms.append(prod)
         print(norms)
-
-    def forward(self, 
-                TXY: torch.Tensor
-    ) -> torch.Tensor:
-        T = TXY[..., :1]
-        XY = TXY[..., 1:]
-        for net in self.blocks_net:
-            XY = XY + T * net(TXY)
-            TXY = torch.cat([T, XY], dim = -1)  
-        return XY
+        return norms
     
+    def forward(self, TXY: torch.Tensor) -> torch.Tensor:
+        T = TXY[..., :1]  
+        XY = TXY[..., 1:]   
+        for block in self.flow_blocks:
+            dXY = block(XY, T)    # (..., dim)
+            XY = XY + T * dXY      # residual update
+            TXY = torch.cat([T, XY], dim=-1)
+        return XY

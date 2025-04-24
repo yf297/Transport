@@ -2,50 +2,33 @@ import torch
 from typing import Callable
 
 class NormalizeTime:
-    def __init__(
-        self,
-        T: torch.Tensor
-    ) -> None:
-        self.max: torch.Tensor = T.max()
-
-    def __call__(
-        self,
-        t: torch.Tensor
-    ) -> torch.Tensor:
-        max_val: torch.Tensor = self.max.to(t.device)
-        return t / max_val
+    def __init__(self, T: torch.Tensor) -> None:
+        self.scale = T.max()
+        
+    def __call__(self, t: torch.Tensor) -> torch.Tensor:
+        return t / self.scale.to(t.device)
 
 class NormalizeLocation:
-    def __init__(
-        self,
-        XY: torch.Tensor
-    ) -> None:
-        self.min: torch.Tensor = XY.min(dim=0).values
-        self.max: torch.Tensor = XY.max(dim=0).values
+    def __init__(self, XY: torch.Tensor) -> None:
+        xy_min = XY.min(dim=0).values        
+        xy_max = XY.max(dim=0).values        
+        self.center = (xy_min + xy_max) / 2  
+        half_ranges = (xy_max - xy_min) / 2  
+        self.scale = half_ranges.max()
 
-    def __call__(
-        self,
-        xy: torch.Tensor
-    ) -> torch.Tensor:
-        min_val: torch.Tensor = self.min.to(xy.device)
-        max_val: torch.Tensor = self.max.to(xy.device)
-        return 2 * (xy - min_val) / (max_val - min_val) - 1
+    def __call__(self, xy: torch.Tensor) -> torch.Tensor:
+        return (xy - self.center.to(xy.device)) / self.scale.to(xy.device)
 
 class NormalizeLocationInverse:
-    def __init__(
-        self,
-        XY: torch.Tensor
-    ) -> None:
-        self.min: torch.Tensor = XY.min(dim=0).values
-        self.max: torch.Tensor = XY.max(dim=0).values
+    def __init__(self, XY: torch.Tensor) -> None:
+        xy_min = XY.min(dim=0).values        
+        xy_max = XY.max(dim=0).values       
+        self.center = (xy_min + xy_max) / 2  
+        half_ranges = (xy_max - xy_min) / 2  
+        self.scale = half_ranges.max()      
 
-    def __call__(
-        self,
-        xy: torch.Tensor
-    ) -> torch.Tensor:
-        min_val: torch.Tensor = self.min.to(xy.device)
-        max_val: torch.Tensor = self.max.to(xy.device)
-        return 0.5 * (xy + 1) * (max_val - min_val) + min_val
+    def __call__(self, xy: torch.Tensor) -> torch.Tensor:
+        return xy * self.scale.to(xy.device) + self.center.to(xy.device)
 
 class NormalizeScalar:
     def __init__(
@@ -54,15 +37,13 @@ class NormalizeScalar:
     ) -> None:
         flat: torch.Tensor = Z.reshape(-1)
         self.mean: torch.Tensor = flat.mean()
-        self.std: torch.Tensor = flat.std()
+        self.scale: torch.Tensor = flat.std()
 
     def __call__(
         self,
         z: torch.Tensor
     ) -> torch.Tensor:
-        mean_val: torch.Tensor = self.mean.to(z.device)
-        std_val: torch.Tensor = self.std.to(z.device)
-        return (z - mean_val) / std_val
+        return (z -  self.mean.to(z.device)) / self.scale.to(z.device)
 
 class ScaleFlow:
     def __init__(
@@ -87,14 +68,11 @@ class ScaleFlow:
         return self.nli(self.flow(TXY))
     
     
-def rescale_temporal_lengthscale(T, temporal_lengthscale):
-    return temporal_lengthscale *T.max()
+def rescale_temporal_lengthscale(nt, temporal_lengthscale):
+    return temporal_lengthscale * nt.scale
 
-def rescale_spatial_lengthscales(XY, spatial_lengthscales):
-    min = XY.min(dim=0).values
-    max = XY.max(dim=0).values
-    return spatial_lengthscales * ( (max - min) / 2)
+def rescale_spatial_lengthscales(nl, spatial_lengthscales):
+    return spatial_lengthscales * nl.scale
 
-def rescale_variance(Z, variance_normalized):
-    std_Z = Z.reshape(-1).std()
-    return variance_normalized * std_Z**2
+def rescale_variance(ns, variance_normalized):
+    return variance_normalized * ns**2

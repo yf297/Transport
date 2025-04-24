@@ -16,11 +16,11 @@ Lambert = cartopy.crs.LambertConformal(central_longitude=262.5, central_latitude
 
 def _download_paths(date: str, 
                     hours: int, 
-                    level: str
+                    level: int
 ) -> list[pathlib.Path]:
     paths: list[pathlib.Path] = []
     for fxx in range(hours + 1):
-        p = herbie.Herbie(date, model="hrrr", fxx=fxx).download(level)
+        p = herbie.Herbie(date, model="hrrr", fxx=fxx).download(f"{level} mb")
         paths.append(pathlib.Path(p))
     return paths
 

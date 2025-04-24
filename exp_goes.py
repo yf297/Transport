@@ -21,15 +21,17 @@ cvf = []
 dvf = []
 
 def run_experiment(start = "00:00", end = "04:06", by = "00:05"):
-    dsf0 = loaders.goes.discrete_scalar_field("2024-09-18", 
+    dsf0 = loaders.goes.discrete_scalar_field("2024-07-13", 
                                              band = 8, 
                                              start = start, 
                                              end = end, 
                                              by = by, 
                                              extent=(-88, -75.1, 30, 36.3))
+    mapping = {"00:05": 6, "00:15": 2, "00:30": 1}
+    nn = mapping[by]
     print(dsf0.coord_field.times[dsf0.coord_field.times.size(0)//2]/3600)
     cvf0 = fields.vector_field.ContinuousVectorField()
-    cvf0.train(dsf0, epochs=50, stride = 3)
+    cvf0.train(dsf0, epochs=50, nn = nn, k = 4, size = 2000)
     cvf.append(cvf0)
     vector = cvf0.func(dsf0.coord_field.times, dsf0.coord_field.locations) 
     dvf0 = fields.vector_field.DiscreteVectorField(dsf0.coord_field, vector)  
@@ -39,14 +41,8 @@ def run_experiment(start = "00:00", end = "04:06", by = "00:05"):
        
 experiments = [
     ("00:00", "04:06", "00:05"),
+    ("00:00", "04:06", "00:15"),
     ("00:00", "04:06", "00:30"),
-    ("00:00", "04:06", "01:00"),
-    ("01:00", "03:06", "00:05"),
-    ("01:00", "03:06", "00:30"),
-    ("01:00", "03:06", "01:00"),
-    ("01:30", "02:34", "00:05"),
-    ("01:30", "02:34", "00:30"),
-    ("01:55", "02:04", "00:05"),
 ]
 
 for start, end, by in experiments:
@@ -55,14 +51,8 @@ for start, end, by in experiments:
     
 experiments = [
     ("00:00", "04:00", "00:05"),
+    ("00:00", "04:00", "00:15"),
     ("00:00", "04:00", "00:30"),
-    ("00:00", "04:00", "01:00"),
-    ("01:00", "03:00", "00:05"),
-    ("01:00", "03:00", "00:30"),
-    ("01:00", "03:00", "01:00"),
-    ("01:30", "02:30", "00:05"),
-    ("01:30", "02:30", "00:30"),
-    ("01:55", "02:05", "00:05")
 ]
 
 def describe_label(start: str, end: str, by: str) -> str:

@@ -12,5 +12,5 @@ class DiscreteCoordField:
     ):
         self.times = times
         self.locations = locations
-        self.proj: Optional[cartopy.crs.CRS] = proj
-        self.extent: Optional[Tuple[float, float, float, float]] = extent
+        self.proj = proj
+        self.extent = extent
