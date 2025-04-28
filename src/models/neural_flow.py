@@ -1,15 +1,15 @@
 import torch
 import torch.nn as nn
 from torch.nn.utils import spectral_norm
-import numpy as np
-class SpacetimeBlock(nn.Module):
+
+class SpaceTimeBlock(nn.Module):
     def __init__(
         self,
         dim: int,
         width: int,
         depth: int,
         p0: float = 0.0,  
-        p: float = 0.0
+        p: float = 0.5
     ):
         super().__init__()
 
@@ -22,7 +22,7 @@ class SpacetimeBlock(nn.Module):
 
         # ── Time net s(t) → ℝ^width ─────────────────────────────────
         time_layers: list[nn.Module] = []
-        lin = nn.Linear(1, width)
+        lin = nn.Linear(1, width, bias = False)
         nn.init.constant_(lin.weight, 0)
         time_layers += [lin]
         self.s_net = nn.Sequential(*time_layers)
@@ -30,7 +30,7 @@ class SpacetimeBlock(nn.Module):
         # ── Combine & project f(h+s) → ℝ^dim ─────────────────────────
         f_layers: list[nn.Module] = []
         f_layers += [nn.ReLU(), nn.Dropout(p0)]        
-        for _ in range(depth):
+        for _ in range(depth-1):
             lin = nn.Linear(width, width)
             nn.init.xavier_uniform_(lin.weight, gain = 0.8)
             f_layers += [lin, nn.ReLU(), nn.Dropout(p)]
@@ -39,7 +39,7 @@ class SpacetimeBlock(nn.Module):
         f_layers += [lin]
         self.f_net = nn.Sequential(*f_layers)
 
-    def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    def forward(self, t: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
         h = self.h_net(x)         
         s = self.s_net(t)        
         z = h + s                 
@@ -49,19 +49,19 @@ class NeuralFlow(nn.Module):
     def __init__(
         self,
         dim: int = 2,
-        depth: int = 2,
         width: int = 48,
-        blocks: int = 3,
+        depth: int = 3,
+        num_blocks: int = 3
     ):
         super().__init__()
-        self.flow_blocks = nn.ModuleList([
-            SpacetimeBlock(dim, width, depth)
-            for _ in range(blocks)
+        self.blocks = nn.ModuleList([
+            SpaceTimeBlock(dim, width, depth)
+            for _ in range(num_blocks)
         ])
-    
+        
     def inspect_weights(self):
         norms = []
-        for block in self.flow_blocks:
+        for block in self.blocks:
             block_norms = []
             for net in (block.h_net, block.f_net):
                 for module in net.modules():
@@ -72,13 +72,11 @@ class NeuralFlow(nn.Module):
             prod = torch.prod(torch.stack(block_norms)).item()
             norms.append(prod)
         print(norms)
-        return norms
-    
+
     def forward(self, TXY: torch.Tensor) -> torch.Tensor:
-        T = TXY[..., :1]  
-        XY = TXY[..., 1:]   
-        for block in self.flow_blocks:
-            dXY = block(XY, T)    # (..., dim)
-            XY = XY + T * dXY      # residual update
-            TXY = torch.cat([T, XY], dim=-1)
-        return XY
+        t = TXY[..., :1]
+        xy = TXY[..., 1:]
+        out = xy
+        for block in self.blocks:
+            out = out + t*block(t, out)
+        return out

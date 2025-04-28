@@ -71,7 +71,7 @@ def _compute_locations(
 def _compute_scalar(
     ds: xr.Dataset
 ) -> torch.Tensor:
-    return torch.tensor(ds.dpt.values.copy(), dtype=torch.float32) - 273.15
+    return torch.tensor(ds.dpt.values.copy(), dtype=torch.float32)
 
 def _compute_vector(ds: xr.Dataset) -> torch.Tensor:
     u = torch.tensor(ds.u.values.copy(), dtype=torch.float32)

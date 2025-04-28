@@ -31,7 +31,7 @@ def run_experiment(start = "00:00", end = "04:06", by = "00:05"):
     nn = mapping[by]
     print(dsf0.coord_field.times[dsf0.coord_field.times.size(0)//2]/3600)
     cvf0 = fields.vector_field.ContinuousVectorField()
-    cvf0.train(dsf0, epochs=50, nn = nn, k = 4, size = 2000)
+    cvf0.train(dsf0, epochs=50, nn = nn, k = 4, size = 3000)
     cvf.append(cvf0)
     vector = cvf0.func(dsf0.coord_field.times, dsf0.coord_field.locations) 
     dvf0 = fields.vector_field.DiscreteVectorField(dsf0.coord_field, vector)  

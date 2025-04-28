@@ -44,15 +44,15 @@ def mle(
                 gp.train()
                 gp.likelihood.train()
                 idx = torch.randperm(XY.size(0))[:size]                
-                TXY_pred, Z_pred = vecchia_blocks.prediction(i=0, idx=idx)
-                TXY_pred, Z_pred = TXY_pred.to(device), Z_pred.to(device)
+                #TXY_pred, Z_pred = vecchia_blocks.prediction(i=0, idx=idx)
+                #TXY_pred, Z_pred = TXY_pred.to(device), Z_pred.to(device)
             
-                gp.set_train_data(TXY_pred, Z_pred, strict=False)
-                output = gp(TXY_pred)
-                ll = mll(output, Z_pred)
+                #gp.set_train_data(TXY_pred, Z_pred, strict=False)
+                #output = gp(TXY_pred)
+                ll = 0.0#mll(output, Z_pred)
                 
     
-                i_sub = torch.randperm(T.size(0))[:k]
+                i_sub = 1 + torch.randperm(T.size(0)-1)[:k]
                 for i in i_sub:             
                     TXY_pred, Z_pred = vecchia_blocks.prediction(i, idx)
                     TXY_pred, Z_pred = TXY_pred.to(device), Z_pred.to(device)
@@ -77,7 +77,7 @@ def mle(
             optimizer1.step()
             
 
-            if epoch % 1 == 0:
+            if epoch % 10 == 0:
                 gp.flow.inspect_weights()
                 ls = gp.covar_module.base_kernel.lengthscale.view(-1).tolist()
                 ls_str = ", ".join(f"{v:.2f}" for v in ls)
