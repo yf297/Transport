@@ -1,86 +1,74 @@
-import sys
-import pathlib
 import warnings
-warnings.filterwarnings('ignore')
-sys.path.insert(0, str(pathlib.Path.cwd()/"src"))
-import random
+import sys
+import os
+import pathlib
 import torch 
 import numpy as np
 import random
-SEED = 42
-random.seed(SEED)
-np.random.seed(SEED)
-torch.manual_seed(SEED)
-torch.cuda.manual_seed_all(SEED)
-import pandas as pd
+import matplotlib.pyplot as plt
+from IPython.display import HTML
+import time
+
+warnings.filterwarnings('ignore')
+sys.path.insert(0, str(pathlib.Path.cwd()/"src"))
+
+
 import loaders.goes
-import fields.vector_field 
+import fields.vector_field
 
-
-cvf = []
-dvf = []
-
-def run_experiment(start = "00:00", end = "04:06", by = "00:05"):
-    dsf0 = loaders.goes.discrete_scalar_field("2024-07-13", 
-                                             band = 8, 
-                                             start = start, 
-                                             end = end, 
-                                             by = by, 
-                                             extent=(-88, -75.1, 30, 36.3))
-    mapping = {"00:05": 6, "00:15": 2, "00:30": 1}
-    nn = mapping[by]
-    print(dsf0.coord_field.times[dsf0.coord_field.times.size(0)//2]/3600)
-    cvf0 = fields.vector_field.ContinuousVectorField()
-    cvf0.train(dsf0, epochs=50, nn = nn, k = 4, size = 3000)
-    cvf.append(cvf0)
-    vector = cvf0.func(dsf0.coord_field.times, dsf0.coord_field.locations) 
-    dvf0 = fields.vector_field.DiscreteVectorField(dsf0.coord_field, vector)  
-    dvf.append(dvf0)
-    del cvf0
-
-       
-experiments = [
-    ("00:00", "04:06", "00:05"),
-    ("00:00", "04:06", "00:15"),
-    ("00:00", "04:06", "00:30"),
+dates = [
+    "2024-09-20",
 ]
 
-for start, end, by in experiments:
-    run_experiment(start=start, end=end, by=by)
-    
-    
-experiments = [
-    ("00:00", "04:00", "00:05"),
-    ("00:00", "04:00", "00:15"),
-    ("00:00", "04:00", "00:30"),
-]
+bands = [8, 9, 10]
+results = {}  
 
-def describe_label(start: str, end: str, by: str) -> str:
-    def to_minutes(t: str) -> int:
-        h, m = map(int, t.split(':'))
-        return h*60 + m
-    half_window = (to_minutes(end) - to_minutes(start)) // 2
-    hrs, mins = divmod(half_window, 60)
-    offset = ''.join(f"{v}{unit}" for v, unit in ((hrs, 'h'), (mins, 'min')) if v)
-    by_min = to_minutes(by)
-    interval = f"{by_min}min" if by_min < 60 else f"{by_min//60}h"
-    return f"{offset} each side, {interval} interval"
-labels = [describe_label(s, e, b) for s, e, b in experiments]
+for date in dates:
+    for band in bands:
+        # Load data
+        dsf = loaders.goes.discrete_scalar_field(date=date, 
+                                        band = band, 
+                                        start = "00:00", 
+                                        end = "04:05", 
+                                        by = "00:30", 
+                                        extent=(-86.1, -75.1, 30, 37.1))
+        t = time.strftime("%H:%M", time.gmtime(int(dsf.coord_field.T[4])))
+        dvf = loaders.goes.discrete_vector_field(date = date, 
+                                         time = t,
+                                         band = band,
+                                         extent=(-86.1, -75.1, 30, 37.1))
 
 
-rmse_matrix = [
-    [cvf_i.RMSE(dvf_j,dvf_j.coord_field.times.size(0)//2) for dvf_j in dvf] 
-    for cvf_i in cvf
-]
+        # Create nested output folder: date/levelmb
+        folder_name = os.path.join("goes", date, f"{band}")
+        os.makedirs(folder_name, exist_ok=True)
 
-df = pd.DataFrame(rmse_matrix, index=labels, columns=labels)
+        # Plot and save scalar field at start and end frames
+        for frame in [0,dsf.coord_field.T.shape[0]-1]:
+            fig = dsf.plot(frame=frame)
+            fig.savefig(os.path.join(folder_name, f"dsf_frame{frame}.png"))
+            plt.close(fig)
 
-latex_code = df.to_latex(
-    index=True,
-    label="tab:rmse",
-    float_format="%.3f"
-)
+        # Plot and save discrete vector field at center frame
+        fig = dvf.plot(gif = False)
+        fig.savefig(os.path.join(folder_name, "dvf_frame2.png"))
+        plt.close(fig)
 
-# write it out
-with open("rmse_table.tex", "w") as f:
-    f.write(latex_code)
+        # Train continuous vector field
+        cvf = fields.vector_field.ContinuousVectorField()
+        cvf.train(dsf, epochs=50, nn=1, k=2, size=3000)
+
+        # Plot and save continuous vector field at center frame
+        fig = cvf.plot(dsf.coord_field, factor=12, frame=4)
+        fig.savefig(os.path.join(folder_name, "cvf_frame2.png"))
+        plt.close(fig)
+
+        sigma2, l0, l1, l2 = cvf.sigma2, cvf.l0/3600, cvf.l1, cvf.l2
+
+        # compute RMS & RMSE
+        n = dvf.coord_field.T.size(0)
+        RMS = sum(dvf.RMS(frame=i) for i in range(n)) / n
+        RMSE = 0.0
+
+        results[(date, band)] = (sigma2, l0, l1, l2, RMS, RMSE)
+

@@ -66,16 +66,18 @@ def _compute_locations(
     x = torch.tensor(ds.x.values, dtype=torch.float32)
     y = torch.tensor(ds.y.values, dtype=torch.float32)
     X,Y = torch.meshgrid(x,y,indexing='xy')
-    return torch.stack([X,Y], dim = -1)
+    return torch.stack([X,Y], dim = -1).reshape(-1,2)
 
 def _compute_scalar(
     ds: xr.Dataset
 ) -> torch.Tensor:
-    return torch.tensor(ds.dpt.values.copy(), dtype=torch.float32)
+    n = ds.dpt.shape[0]
+    return torch.tensor(ds.dpt.values.copy(), dtype=torch.float32).reshape(n, -1)
 
 def _compute_vector(ds: xr.Dataset) -> torch.Tensor:
-    u = torch.tensor(ds.u.values.copy(), dtype=torch.float32)
-    v = torch.tensor(ds.v.values.copy(), dtype=torch.float32)
+    n = ds.u.shape[0]
+    u = torch.tensor(ds.u.values.copy(), dtype=torch.float32).reshape(n, -1)
+    v = torch.tensor(ds.v.values.copy(), dtype=torch.float32).reshape(n, -1)
     return torch.stack([u, v], dim=-1)
 
 
@@ -88,11 +90,12 @@ def discrete_scalar_field(
     paths = _download_paths(date, hours, level)
     ds = _concat_datasets(paths)
     ds, extent = _subset_dataset(ds, extent)
-    times = torch.linspace(0, hours * 3600, hours + 1)
-    locations = _compute_locations(ds)
-    dcf = fields.coord_field.DiscreteCoordField(times, locations, Lambert, extent)
-    scalar = _compute_scalar(ds)
-    dsf = fields.scalar_field.DiscreteScalarField(dcf, scalar)
+    grid = ds.dpt.shape[1:]
+    T = torch.linspace(0, hours * 3600, hours + 1)
+    XY = _compute_locations(ds)
+    dcf = fields.coord_field.DiscreteCoordField(T, XY, Lambert, extent, grid)
+    Z = _compute_scalar(ds)
+    dsf = fields.scalar_field.DiscreteScalarField(dcf, Z)
     return dsf
 
 def discrete_vector_field(
@@ -104,9 +107,10 @@ def discrete_vector_field(
     paths = _download_paths(date, hours, level)
     ds = _concat_datasets(paths)
     ds, extent = _subset_dataset(ds, extent)
-    times = torch.linspace(0, hours * 3600, hours + 1)
-    locations = _compute_locations(ds)
-    dcf = fields.coord_field.DiscreteCoordField(times, locations, Lambert, extent)
-    vector = _compute_vector(ds)
-    dsf = fields.vector_field.DiscreteVectorField(dcf, vector)
+    grid = ds.dpt.shape[1:]
+    T = torch.linspace(0, hours * 3600, hours + 1)
+    XY = _compute_locations(ds)
+    dcf = fields.coord_field.DiscreteCoordField(T, XY, Lambert, extent, grid)
+    UV = _compute_vector(ds)
+    dsf = fields.vector_field.DiscreteVectorField(dcf, UV)
     return dsf

@@ -64,12 +64,13 @@ def _compute_locations(
     x = torch.tensor(ds.x.values, dtype=torch.float32)
     y = torch.tensor(ds.y.values, dtype=torch.float32)
     X,Y = torch.meshgrid(x,y,indexing='xy')
-    return torch.stack([X,Y], dim = -1)
+    return torch.stack([X,Y], dim = -1).reshape(-1,2)
 
 def _compute_scalar(
     ds: xr.Dataset
 ) -> torch.Tensor:
-    return torch.tensor(ds["CMI"].values.copy(), dtype=torch.float32)
+    n  = ds["CMI"].values.shape[0]
+    return torch.tensor(ds["CMI"].values.copy(), dtype=torch.float32).reshape(n, -1)
 
 def discrete_scalar_field(
     date: str, 
@@ -83,19 +84,19 @@ def discrete_scalar_field(
     ds = _concat_datasets(paths)
     ds, extent = _subset_dataset(ds, extent)
     Geostationary = ds.metpy.parse_cf('CMI').metpy.cartopy_crs
-    
+    grid =  ds["CMI"].values.shape[1:]
     time_array = ds.t.values
     seconds_since_midnight = (time_array - time_array.astype('datetime64[D]')) / np.timedelta64(1, 's')
-    times = torch.tensor(seconds_since_midnight, dtype=torch.float32).unsqueeze(1)
-    locations = _compute_locations(ds)
-    scalar = _compute_scalar(ds)
+    T = torch.tensor(seconds_since_midnight, dtype=torch.float32).unsqueeze(1)
+    XY = _compute_locations(ds)
+    Z = _compute_scalar(ds)
 
     h, m = map(int, by.split(":"))
     step = (h * 60 + m)//5
-    times = times[::step]
-    scalar = scalar[::step, :,:]
-    dcf = fields.coord_field.DiscreteCoordField(times, locations, Geostationary, extent)
-    dsf = fields.scalar_field.DiscreteScalarField(dcf, scalar)
+    T = T[::step]
+    Z = Z[::step, :]
+    dcf = fields.coord_field.DiscreteCoordField(T, XY, Geostationary, extent, grid)
+    dsf = fields.scalar_field.DiscreteScalarField(dcf, Z)
     return dsf
 
 
@@ -119,9 +120,10 @@ def _download_wind_data(date: str,
     data = data.dropna(dim="nMeasures")
     return data
 
-def _compute_wind_func( ds: xr.Dataset, 
-                            extent: Tuple[float, float, float, float]
-    ):
+def _compute_wind_func(
+    ds: xr.Dataset, 
+    extent: Tuple[float, float, float, float]
+):
 
 
     paths = _download_band_paths("01-01-25", "00:00", "00:05", 9)
@@ -144,25 +146,25 @@ def _compute_wind_func( ds: xr.Dataset,
     wspd = ds.wind_speed.values
     wdir = ds.wind_direction.values
     wdir = np.deg2rad(wdir)  
-    u = torch.tensor(-wspd * np.sin(wdir)).unsqueeze(1)
-    v = torch.tensor(-wspd * np.cos(wdir)).unsqueeze(1)
-    UV = torch.cat([u, v], dim=-1)[mask]
+    uu = torch.tensor(-wspd * np.sin(wdir)).unsqueeze(1)
+    vv = torch.tensor(-wspd * np.cos(wdir)).unsqueeze(1)
+    UV = torch.cat([uu, vv], dim=-1)[mask].unsqueeze(0)
     
     t = np.array([ds.time.values[0]])
     T = torch.tensor((t - t.astype('datetime64[D]')) / np.timedelta64(1, 's'))
     
-    return T, XY, UV
+    return T, XY, UV, Geostationary, (l, r, d, u)
     
 
 
-'''def discrete_vector_field(
+def discrete_vector_field(
     date: str,
     time: int,
     band: int,
     extent: Tuple[float, float, float, float]
 ) -> fields.vector_field.DiscreteVectorField:
     ds = _download_wind_data(date, time, band)
-    times, locations, vector, Geostationary, extent = _compute_wind_locations(ds, extent)
-    dcf = fields.coord_field.DiscreteCoordField(times, locations, Geostationary, extent)
-    dsf = fields.vector_field.DiscreteVectorField(dcf, vector)
-    return dsf'''
+    T, XY, UV, Geostationary, extent = _compute_wind_func(ds, extent)
+    dcf = fields.coord_field.DiscreteCoordField(T, XY, Geostationary, extent, None)
+    dsf = fields.vector_field.DiscreteVectorField(dcf, UV)
+    return dsf

@@ -3,7 +3,6 @@ import torch
 import gpytorch.models
 import train.vecchia 
 import gc
-from .LBFGS import FullBatchLBFGS
 import random
 
 def mle(
@@ -13,28 +12,24 @@ def mle(
     gp: gpytorch.models.ExactGP,
     epochs: int,
     nn: int, 
-    k: int = 4,
-    size: int = 4
+    k: int,
+    size: int
     )-> None:
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     gp.to(device)
-    gp.flow.to(device)
     gp.flow.train()
-    gp.train()
-    gp.likelihood.train()
 
     mll = gpytorch.mlls.ExactMarginalLogLikelihood(gp.likelihood, gp)
     vecchia_blocks = train.vecchia.VecchiaBlocks(T, XY, Z)
 
-    optimizer1 = torch.optim.Adam([
-                            {"params": gp.flow.parameters(), "lr": 0.003},
+    optimizer = torch.optim.Adam([
+                            {"params": gp.flow.parameters(), "lr": 0.01},
                             {"params": gp.covar_module.parameters(), "lr": 0.01},
                             {"params": gp.mean_module.parameters(), "lr": 0.01},
-                            {"params": gp.likelihood.parameters(),"lr": 0.1},
+                            {"params": gp.likelihood.parameters(), "lr":0.1}
                             ])
-    
+    print("fitting flow")
     with gpytorch.settings.detach_test_caches(state=False),\
-        gpytorch.settings.max_preconditioner_size(100),\
         gpytorch.settings.fast_computations(log_prob=False, 
                                     covar_root_decomposition=False, 
                                     solves=False):
@@ -43,15 +38,10 @@ def mle(
             def compute_vecchia_ll():
                 gp.train()
                 gp.likelihood.train()
+                optimizer.zero_grad()
                 idx = torch.randperm(XY.size(0))[:size]                
-                #TXY_pred, Z_pred = vecchia_blocks.prediction(i=0, idx=idx)
-                #TXY_pred, Z_pred = TXY_pred.to(device), Z_pred.to(device)
-            
-                #gp.set_train_data(TXY_pred, Z_pred, strict=False)
-                #output = gp(TXY_pred)
-                ll = 0.0#mll(output, Z_pred)
+                ll = 0.0
                 
-    
                 i_sub = 1 + torch.randperm(T.size(0)-1)[:k]
                 for i in i_sub:             
                     TXY_pred, Z_pred = vecchia_blocks.prediction(i, idx)
@@ -68,23 +58,19 @@ def mle(
                     gp.likelihood.eval()
                     output = gp(TXY_pred)
                     ll += -mll(output, Z_pred)
-                return ll/(k+1)
+                return ll/k
             
 
-            optimizer1.zero_grad()
             ll = compute_vecchia_ll()
             ll.backward()
-            optimizer1.step()
+            optimizer.step()
             
-
-            if epoch % 10 == 0:
+            if epoch % 1 == 0:
                 gp.flow.inspect_weights()
                 ls = gp.covar_module.base_kernel.lengthscale.view(-1).tolist()
                 ls_str = ", ".join(f"{v:.2f}" for v in ls)
                 print(f"Epoch {epoch}/{epochs} — Avg NLL: {ll.item():.4f} — lengthscales: {ls_str}")
     
-                
     gp.flow.eval()
-    gp.eval()
-    gp.likelihood.eval()
     gp.to("cpu")
+

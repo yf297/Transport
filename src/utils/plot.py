@@ -1,19 +1,22 @@
 import torch
+import numpy as np
 import matplotlib.figure
 import matplotlib.animation
 import matplotlib.pyplot
 import cartopy.feature
 from typing import Union, Tuple, Optional
 
+
 def scalar_field(
-    scalar: torch.Tensor,
+    Z: torch.Tensor,
     proj: Optional[object] = None,
     extent: Optional[Tuple[float, float, float, float]] = None,
     frame: int = 0,
     gif: bool = False
 ) -> Union[matplotlib.figure.Figure, matplotlib.animation.FuncAnimation]:
-    scalar_np = scalar.numpy() 
-    vmin, vmax = scalar_np.min(), scalar_np.max()
+    
+    Z_np = Z.numpy() 
+    vmin, vmax = Z_np.min(), Z_np.max()
     fig = matplotlib.pyplot.figure()
     
     if proj is not None:
@@ -31,7 +34,7 @@ def scalar_field(
         transform = None
 
     img = ax.imshow(
-        scalar_np[0],
+        Z_np[0],
         vmin=vmin,
         vmax=vmax,
         extent=extent,
@@ -40,77 +43,96 @@ def scalar_field(
 
     if gif:
         def update(i):
-            img.set_data(scalar_np[i])
+            img.set_data(Z_np[i])
             return (img,)
 
         anim = matplotlib.animation.FuncAnimation(
             fig, update,
-            frames=scalar_np.shape[0],
+            frames=Z_np.shape[0],
             interval=200,
             blit=True
         )
         matplotlib.pyplot.close(fig)
         return anim
     else:
-        img.set_data(scalar_np[frame])
+        img.set_data(Z_np[frame])
         fig.tight_layout()
         matplotlib.pyplot.close(fig)
         return fig
 
 
-
 def vector_field(
-    locations: torch.Tensor,
-    vector: torch.Tensor,
+    XY: torch.Tensor,
+    UV: torch.Tensor,
     proj: Optional[object] = None,
     extent: Optional[Tuple[float, float, float, float]] = None,
     frame: int = 0,
     gif: bool = False
 ) -> Union[matplotlib.figure.Figure, matplotlib.animation.FuncAnimation]:
-    loc_np = locations.numpy()      
-    vec_np = vector.detach().numpy()  
-    xs, ys = loc_np[:,:,0], loc_np[:,:,1]
-    N = vec_np.shape[0]
-    fig =  matplotlib.pyplot.figure()
-    
+
+    XY_np = XY.numpy()
+    UV_np = UV.detach().numpy()
+    xs, ys = XY_np[:, 0], XY_np[:, 1]
+    N = UV_np.shape[0]
+
+    #x_range = xs.max() - xs.min()
+    #y_range = ys.max() - ys.min()
+    #spacing = np.sqrt((x_range * y_range) / N)
+    scale = 3e-4
+
+    fig = matplotlib.pyplot.figure()
     if proj:
-        ax = fig.add_subplot(1,1,1, projection=proj)
+        ax = fig.add_subplot(1, 1, 1, projection=proj)
         ax.set_extent(extent, crs=proj)
         ax.stock_img()
         ax.add_feature(cartopy.feature.COASTLINE.with_scale("50m"))
         ax.add_feature(cartopy.feature.STATES.with_scale("50m"))
         transform = proj
     else:
-        ax = fig.add_subplot(1,1,1)
+        ax = fig.add_subplot(1, 1, 1)
         ax.set_aspect("equal")
         transform = None
 
     if gif:
         Q = ax.quiver(
             xs, ys,
-            vec_np[0,:,:,0], vec_np[0,:,:,1],
-            angles="xy", scale_units="xy", color = "red",
+            UV_np[0, :, 0], UV_np[0, :, 1],
+            angles="xy", scale_units="xy",
+            scale=scale, 
+            width=0.003,             # thinner shafts
+            headwidth=4,             # wider heads
+            headlength=6,            # longer heads
+            headaxislength=5,        # stem length inside head
+            pivot="mid",             # arrows centered on the point
+            cmap="viridis",      
             transform=transform
         )
         def _update(i):
-            Q.set_UVC(vec_np[i,:,:,0], vec_np[i,:,:,1])
+            Q.set_UVC(UV_np[i, :, 0], UV_np[i, :, 1])
             return (Q,)
 
         anim = matplotlib.animation.FuncAnimation(
-            fig, _update, frames=N,
-            interval=200, blit=False
+            fig, _update,
+            frames=N,
+            interval=200,
+            blit=False
         )
         matplotlib.pyplot.close(fig)
         return anim
-
-    ax.quiver(
-        xs, ys,
-        vec_np[frame,:,:,0], vec_np[frame,:,:,1],
-        angles="xy", scale_units="xy", color = "red",
-        transform=transform
-    )
-    fig.tight_layout()
-    matplotlib.pyplot.close(fig)
-    return fig
-   
-
+    else:
+        ax.quiver(
+            xs, ys,
+            UV_np[frame, :, 0], UV_np[frame, :, 1],
+            angles="xy", scale_units="xy",
+            scale=scale, 
+            width=0.003,             # thinner shafts
+            headwidth=3,             # wider heads
+            headlength=4,            # longer heads
+            headaxislength=5,        # stem length inside head
+            pivot="mid",             # arrows centered on the point
+            color="red",      
+            transform=transform
+        )
+        fig.tight_layout()
+        matplotlib.pyplot.close(fig)
+        return fig
