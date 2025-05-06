@@ -1,21 +1,20 @@
 import torch
-import numpy as np
-import matplotlib.figure
 import matplotlib.animation
 import matplotlib.pyplot
 import cartopy.feature
-from typing import Union, Tuple, Optional
-
 
 def scalar_field(
-    Z: torch.Tensor,
-    proj: Optional[object] = None,
-    extent: Optional[Tuple[float, float, float, float]] = None,
-    frame: int = 0,
-    gif: bool = False
-) -> Union[matplotlib.figure.Figure, matplotlib.animation.FuncAnimation]:
+    XY,
+    Z,
+    proj=None,
+    extent=None,
+    frame=0,
+    gif=False
+):
     
     Z_np = Z.numpy() 
+    XY_np = XY.numpy()
+    xs, ys = XY_np[:, 0], XY_np[:, 1]
     vmin, vmax = Z_np.min(), Z_np.max()
     fig = matplotlib.pyplot.figure()
     
@@ -33,17 +32,12 @@ def scalar_field(
         extent = None
         transform = None
 
-    img = ax.imshow(
-        Z_np[0],
-        vmin=vmin,
-        vmax=vmax,
-        extent=extent,
-        transform=transform
-    )
+    img = ax.scatter(xs, ys, c=Z[0], cmap="viridis", s=5, vmin=vmin, vmax=vmax)
+
 
     if gif:
         def update(i):
-            img.set_data(Z_np[i])
+            img.set_array(Z[i])
             return (img,)
 
         anim = matplotlib.animation.FuncAnimation(
@@ -55,30 +49,27 @@ def scalar_field(
         matplotlib.pyplot.close(fig)
         return anim
     else:
-        img.set_data(Z_np[frame])
+        img.set_array(Z_np[frame])
         fig.tight_layout()
         matplotlib.pyplot.close(fig)
         return fig
 
 
 def vector_field(
-    XY: torch.Tensor,
-    UV: torch.Tensor,
-    proj: Optional[object] = None,
-    extent: Optional[Tuple[float, float, float, float]] = None,
-    frame: int = 0,
-    gif: bool = False
-) -> Union[matplotlib.figure.Figure, matplotlib.animation.FuncAnimation]:
+    XY,
+    UV,
+    proj=None,
+    extent=None,
+    frame=0,
+    gif=False
+):
 
     XY_np = XY.numpy()
     UV_np = UV.detach().numpy()
     xs, ys = XY_np[:, 0], XY_np[:, 1]
     N = UV_np.shape[0]
 
-    #x_range = xs.max() - xs.min()
-    #y_range = ys.max() - ys.min()
-    #spacing = np.sqrt((x_range * y_range) / N)
-    scale = 3e-4
+    scale = 2e-4
 
     fig = matplotlib.pyplot.figure()
     if proj:
@@ -99,12 +90,12 @@ def vector_field(
             UV_np[0, :, 0], UV_np[0, :, 1],
             angles="xy", scale_units="xy",
             scale=scale, 
-            width=0.003,             # thinner shafts
-            headwidth=4,             # wider heads
-            headlength=6,            # longer heads
-            headaxislength=5,        # stem length inside head
-            pivot="mid",             # arrows centered on the point
-            cmap="viridis",      
+            width=0.003,             
+            headwidth=4,             
+            headlength=6,            
+            headaxislength=5,       
+            pivot="mid", 
+            color="red",      
             transform=transform
         )
         def _update(i):
@@ -125,11 +116,11 @@ def vector_field(
             UV_np[frame, :, 0], UV_np[frame, :, 1],
             angles="xy", scale_units="xy",
             scale=scale, 
-            width=0.003,             # thinner shafts
-            headwidth=3,             # wider heads
-            headlength=4,            # longer heads
-            headaxislength=5,        # stem length inside head
-            pivot="mid",             # arrows centered on the point
+            width=0.003,           
+            headwidth=3,          
+            headlength=4,           
+            headaxislength=5,       
+            pivot="mid",             
             color="red",      
             transform=transform
         )

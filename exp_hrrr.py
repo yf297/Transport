@@ -16,14 +16,14 @@ import loaders.hrrr
 import fields.vector_field
 
 dates = [
-    "2024-09-18",
+    #"2024-09-18",
     "2024-09-19",
     "2024-09-20",
     "2024-09-21",
-    "2024-09-22"
+    #"2024-09-22"
 ]
 
-levels = [500, 700]
+levels = [500]
 results = {}  
 
 for date in dates:
@@ -49,7 +49,7 @@ for date in dates:
 
         # Train continuous vector field
         cvf = fields.vector_field.ContinuousVectorField()
-        cvf.train(dsf, epochs=100, nn=1, k=4, size=4000)
+        cvf.train(dsf, epochs=100,factor = 7)
 
         # Plot and save continuous vector field at center frame
         fig = cvf.plot(dsf.coord_field, factor=12, frame=2)

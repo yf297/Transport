@@ -5,72 +5,82 @@ import train.vecchia
 import gc
 import random
 
+
 def mle(
-    T: torch.Tensor,
-    XY: torch.Tensor,
-    Z: torch.Tensor,
-    gp: gpytorch.models.ExactGP,
-    epochs: int,
-    nn: int, 
-    k: int,
-    size: int
-    )-> None:
+    T,
+    XY, 
+    Z,
+    gp,
+    epochs,
+    size, 
+    warmup_epochs = 5
+):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    T, XY, Z = T.to(device), XY.to(device), Z.to(device)
     gp.to(device)
-    gp.flow.train()
-
-    mll = gpytorch.mlls.ExactMarginalLogLikelihood(gp.likelihood, gp)
-    vecchia_blocks = train.vecchia.VecchiaBlocks(T, XY, Z)
-
-    optimizer = torch.optim.Adam([
-                            {"params": gp.flow.parameters(), "lr": 0.01},
-                            {"params": gp.covar_module.parameters(), "lr": 0.01},
-                            {"params": gp.mean_module.parameters(), "lr": 0.01},
-                            {"params": gp.likelihood.parameters(), "lr":0.1}
-                            ])
-    print("fitting flow")
-    with gpytorch.settings.detach_test_caches(state=False),\
-        gpytorch.settings.fast_computations(log_prob=False, 
-                                    covar_root_decomposition=False, 
-                                    solves=False):
-        
-        for epoch in range(1, epochs + 1):
-            def compute_vecchia_ll():
-                gp.train()
-                gp.likelihood.train()
-                optimizer.zero_grad()
-                idx = torch.randperm(XY.size(0))[:size]                
-                ll = 0.0
-                
-                i_sub = 1 + torch.randperm(T.size(0)-1)[:k]
-                for i in i_sub:             
-                    TXY_pred, Z_pred = vecchia_blocks.prediction(i, idx)
-                    TXY_pred, Z_pred = TXY_pred.to(device), Z_pred.to(device)
-                
-                    TXY_cond, Z_cond = vecchia_blocks.conditioning(i, idx, nn)
-                    TXY_cond, Z_cond = TXY_cond.to(device), Z_cond.to(device)
-                
-                    gp.set_train_data(
-                        inputs=TXY_cond,
-                        targets=Z_cond,
-                        strict=False)
-                    gp.eval()
-                    gp.likelihood.eval()
-                    output = gp(TXY_pred)
-                    ll += -mll(output, Z_pred)
-                return ll/k
-            
-
-            ll = compute_vecchia_ll()
-            ll.backward()
-            optimizer.step()
-            
-            if epoch % 1 == 0:
-                gp.flow.inspect_weights()
-                ls = gp.covar_module.base_kernel.lengthscale.view(-1).tolist()
-                ls_str = ", ".join(f"{v:.2f}" for v in ls)
-                print(f"Epoch {epoch}/{epochs} — Avg NLL: {ll.item():.4f} — lengthscales: {ls_str}")
+    gp.flow.to(device)
+    print("moved to gpu")
     
-    gp.flow.eval()
-    gp.to("cpu")
+    mll = gpytorch.mlls.ExactMarginalLogLikelihood(gp.likelihood, gp)
+    
+    optim_gp = torch.optim.Adam([
+        {"params": gp.mean_module.parameters(),  "lr": 0.1},
+        {"params": gp.covar_module.parameters(), "lr": 0.1},
+    ])
 
+    optim_flow = torch.optim.AdamW([
+        {"params": gp.flow.parameters(),  "lr": 0.005, "weight_decay":0.01},
+        {"params": gp.likelihood.parameters(), "lr": 0.1},
+    ])
+    
+    gp.train()
+    gp.likelihood.train()
+    gp.flow.train()
+    
+    with gpytorch.settings.fast_computations(log_prob=False,
+                                             covar_root_decomposition=False,
+                                             solves=False):
+        for epoch in range(1, epochs + 1):
+            optim_gp.zero_grad()
+            optim_flow.zero_grad()
+            
+            idx = torch.randperm(Z.size(0))[:size]
+            T_train = T[idx]
+            XY_train = XY[idx]
+            Z_train = Z[idx]
+            gp.set_train_data(inputs=(T_train, XY_train), targets=Z_train, strict=False)
+            
+            if epoch == warmup_epochs + 1:
+                optim_flow = torch.optim.AdamW([
+                    {"params": gp.flow.parameters(),  "lr": 0.01, "weight_decay": 0.01},
+                    {"params": gp.likelihood.parameters(), "lr": 0.1},
+                ])
+
+            
+            output = gp(T_train, XY_train)
+            ll = -mll(output, Z_train)
+            
+            ll.backward()
+            optim_flow.step()
+            if epoch > warmup_epochs:
+                optim_gp.step()
+
+            gp.flow.project_weights()
+            gp.flow.inspect_weights()
+            ls = gp.covar_module.base_kernel.lengthscale.view(-1).tolist()
+            ls_str = ", ".join(f"{v:.2f}" for v in ls)
+            noise_var = gp.likelihood.noise_covar.noise.item()
+            outputscale = gp.covar_module.outputscale.item()
+            print(
+                f"Epoch {epoch}/{epochs} — "
+                f"Avg likelihood: {ll.item():.4f} — "
+                f"outputscale: {outputscale:.4f} — "
+                f"lengthscales: {ls_str} — "
+                f"noise_var: {noise_var:.4f}"
+            )
+
+    gp.eval()
+    gp.likelihood.eval()
+    gp.flow.eval()
+    gp.flow.to("cpu")
+    gp.to("cpu")

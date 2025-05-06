@@ -56,7 +56,7 @@ for date in dates:
 
         # Train continuous vector field
         cvf = fields.vector_field.ContinuousVectorField()
-        cvf.train(dsf, epochs=50, nn=1, k=2, size=3000)
+        cvf.train(dsf, epochs=100, nn=1, k=4, size=4000)
 
         # Plot and save continuous vector field at center frame
         fig = cvf.plot(dsf.coord_field, factor=12, frame=4)
