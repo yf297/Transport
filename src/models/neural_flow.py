@@ -1,96 +1,96 @@
-import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class OrthoLinear(nn.Module):
-    def __init__(self, width):
-        super().__init__()
-        self.W_raw = nn.Parameter(torch.empty(width, 2))
-        nn.init.orthogonal_(self.W_raw, gain=1.0)
-        self.bias = nn.Parameter(torch.zeros(width)) 
 
-    def forward(self, x):
-        # compute Q once per forward
-        Q, _ = torch.linalg.qr(self.W_raw, mode='reduced')
-        # y = Q x + b
-        return F.linear(x, Q)
-
-    def inverse(self, y):
-        Q, _ = torch.linalg.qr(self.W_raw, mode='reduced')
-        # undo: x = Qᵀ(y − b) = Qᵀ y + (−Qᵀ b)
-        b_inv = -Q.T @ self.bias
-        return F.linear(y, Q.T)
-
-class Displacement(nn.Module):
+class FlowBlock(nn.Module):
     def __init__(self, width, depth):
         super().__init__()
-        act = nn.ReLU()
-
-        b_layers = [nn.Linear(1, width, bias = False), act]
-        b_layers.append(nn.Linear(width, width, bias = False))
-        self.b_net = nn.Sequential(*b_layers)
+  
+        self.s = nn.Sequential(nn.Linear(1, width), 
+                            nn.Tanh(), 
+                            nn.Linear(width, 2, bias = False))
         
-        s_layers = [nn.Linear(1, width, bias = False), act]
-        s_layers.append(nn.Linear(width, width, bias = False))
-        self.s_net = nn.Sequential(*s_layers)
+        self.W = nn.Linear(2, width, bias=False)
+        self.b = nn.Linear(1, width)
+        hidden_layers = [nn.ReLU()]
+        for i in range(depth - 1):
+            lin = nn.Linear(width, width)
+            hidden_layers += [lin, nn.ReLU()]
+        self.hidden = nn.Sequential(*hidden_layers)
+        self.V = nn.Linear(width, 2)
 
-        f_layers = []
-        for _ in range(depth-1):
-            lin = nn.Linear(width, width, bias = False)
-            f_layers += [lin, act]
-        lin = nn.Linear(width, width, bias = False)
-        f_layers.append(lin)
-        self.f_net = nn.Sequential(*f_layers)
+    def project_weight_norms(self, max_norms):
+        norm = torch.linalg.matrix_norm(self.W.weight, ord=2)
+        if norm > max_norms[0]:
+            self.W.weight.data.mul_(max_norms[0] / norm)
 
-        def init_fn(m):
-            if isinstance(m, nn.Linear):
-                nn.init.kaiming_normal_(m.weight, nonlinearity="relu")
-                m.weight.data /= 2 * torch.linalg.matrix_norm(m.weight.data, ord=2)
+        j = 1 
+        for layer in self.hidden:
+            if hasattr(layer, "weight"):
+                norm = torch.linalg.matrix_norm(layer.weight, ord=2)
+                if norm > max_norms[j]:
+                    layer.weight.data.mul_(max_norms[j] / norm)
+                j += 1
+
+        norm = torch.linalg.matrix_norm(self.V.weight, ord=2)
+        if norm > max_norms[-1]:
+            self.V.weight.data.mul_(max_norms[-1] / norm)
+
         
-        self.f_net.apply(init_fn)
-        self.b_net.apply(init_fn)
-        self.s_net.apply(init_fn)
+    def forward(self, T, XY):
+        T = torch.atleast_1d(T)
+        return self.s(T)*self.V(self.hidden(self.W(XY) + self.b(T)))
 
+    
+class Warp(nn.Module):
+    def __init__(self, width,depth, blocks):
+        super().__init__()
+        self.blocks = nn.ModuleList([
+            FlowBlock(width, depth) for _ in range(blocks)
+        ])
 
-    def forward(self, T, P):
-        return self.f_net(self.s_net(T)*P + self.b_net(T))
+    def forward(self, T, XY):
+        for block in self.blocks:
+            XY = XY + block(T, XY)
+        return XY
+
 
 
 class NeuralFlow(nn.Module):
-    def __init__(self, width=32, depth=2, nets=3):
+    def __init__(self, width=32, depth=2, blocks=5):
         super().__init__()
-        self.displacements = nn.ModuleList([
-            Displacement(width, depth) for _ in range(nets)
-        ])
-        self.proj = OrthoLinear(width)
+        self.warp = Warp(width,depth, blocks)
 
-    def project_weights(self):
-        with torch.no_grad():
-            for disp in self.displacements:
-                layers = [m for m in disp.f_net.modules() if isinstance(m, nn.Linear)]
-                norms = torch.tensor([
-                    torch.linalg.matrix_norm(m.weight, ord=2) for m in layers
-                ], device=layers[0].weight.device)
-                prod = norms.prod()
-                if prod > 1.0:
-                    L = norms.numel()
-                    scale = (1.0 / (prod + 1e-12)) ** (1.0 / L)
-                    for m in layers:
-                        m.weight.data.mul_(scale)
-
-    def inspect_weights(self):
-        for i, disp in enumerate(self.displacements):
+        inner_norm = 2
+        outer_norm = 1
+        hidden_norm = (1.0/ (inner_norm * outer_norm)) ** (1 / (depth - 1))  
+        self.max_norms = [inner_norm] + [hidden_norm] * (depth - 1) + [outer_norm]
+    
+    def project_all_weight_norms(self):
+        for block in self.warp.blocks:
+            block.project_weight_norms(self.max_norms)
+            
+    def check_weight_norm_products(self):
+        for i, block in enumerate(self.warp.blocks):
             norms = []
-            for m in disp.f_net.modules():
-                if isinstance(m, nn.Linear):
-                    norms.append(torch.linalg.matrix_norm(m.weight, ord=2))
-            prod = torch.prod(torch.stack(norms))
-            print(f"Displacement #{i} → product of spectral‐norms = {prod.item():.4f}")
+            norms.append(torch.linalg.matrix_norm(block.W.weight, ord=2).item())
+            for layer in block.hidden:
+                if hasattr(layer, "weight"):
+                    norms.append(torch.linalg.matrix_norm(layer.weight, ord=2).item())
+            norms.append(torch.linalg.matrix_norm(block.V.weight, ord=2).item())
+
+            product = 1.0
+            for n in norms:
+                product *= n
+
+            print(f"Block {i}: product of normalized weight norms = {product:.6f}")
 
     def forward(self, T, XY):
-        P = self.proj(XY)
-        for disp in self.displacements:
-            P = P + disp(T, P)    
-        A = self.proj.inverse(P)
-        return A
+        T = torch.atleast_1d(T)
+        XY = torch.atleast_2d(XY)
+        T = T.unsqueeze(1).unsqueeze(2)
+        XY = XY.unsqueeze(0).expand(T.size(0), -1, 2)
+
+        A = self.warp(T, XY)
+        return A.reshape(2) if A.size(1) == 1 else A.reshape(-1, 2)

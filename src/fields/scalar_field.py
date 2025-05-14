@@ -9,7 +9,7 @@ class DiscreteScalarField:
     ):
         self.coord_field = coord_field
         self.Z = Z
-
+        
     def plot(
         self,
         factor=1,
@@ -36,5 +36,5 @@ class DiscreteScalarField:
             proj=self.coord_field.proj,
             extent=self.coord_field.extent,
             frame=frame,
-            gif=gif,
+            gif=gif
         )

@@ -60,7 +60,7 @@ def discrete_scalar_field(date, start, end, band, extent):
     grid = ds["CMI"].values.shape[1:]
     time_array = ds.t.values
     seconds_since_midnight = (time_array - time_array.astype('datetime64[D]')) / np.timedelta64(1, 's')
-    T = torch.tensor(seconds_since_midnight, dtype=torch.float32).unsqueeze(1)
+    T = torch.tensor(seconds_since_midnight, dtype=torch.float32)
     XY = _compute_locations(ds)
     Z = _compute_scalar(ds)
 
@@ -87,11 +87,11 @@ def _download_wind_data(date, time, band=9):
     data = data.dropna(dim="nMeasures")
     return data
 
+
 def _compute_wind_func(ds, extent):
     paths = _download_band_paths("01-01-25", "00:00", "00:05", 9)
     dsb = _concat_datasets(paths)
     Geostationary = dsb.metpy.parse_cf('CMI').metpy.cartopy_crs
-
     pc = ds.metpy.parse_cf('wind_speed').metpy.cartopy_crs
     x = ds.lon.values
     y = ds.lat.values
@@ -104,6 +104,11 @@ def _compute_wind_func(ds, extent):
     d = Geostationary.transform_point(xmin, ymin, pc)[1]
     mask = (XY[:, 0] >= l) & (XY[:, 0] <= r) & (XY[:, 1] >= d) & (XY[:, 1] <= u)
     XY = XY[mask]
+    
+
+    XY = torch.stack([torch.tensor(x,dtype=torch.float32),
+                    torch.tensor(y,dtype=torch.float32)], dim = -1)[mask]
+
 
     wspd = ds.wind_speed.values
     wdir = ds.wind_direction.values
@@ -115,11 +120,13 @@ def _compute_wind_func(ds, extent):
     t = np.array([ds.time.values[0]])
     T = torch.tensor((t - t.astype('datetime64[D]')) / np.timedelta64(1, 's'), dtype=torch.float32)
 
-    return T, XY, UV, Geostationary, (l, r, d, u)
+    return T, XY, UV, PlateCarree, extent
 
 def discrete_vector_field(date, time, band, extent):
+    
     ds = _download_wind_data(date, time, band)
-    T, XY, UV, Geostationary, extent = _compute_wind_func(ds, extent)
-    dcf = fields.coord_field.DiscreteCoordField(T, XY, Geostationary, extent, None)
-    dsf = fields.vector_field.DiscreteVectorField(dcf, UV)
-    return dsf
+    T, XY, UV, PlateCarree, extent = _compute_wind_func(ds, extent)
+    dcf = fields.coord_field.DiscreteCoordField(T, XY, PlateCarree, extent, None)
+    dvf = fields.vector_field.DiscreteVectorField(dcf, UV)
+    
+    return dvf

@@ -2,6 +2,7 @@ import torch
 import matplotlib.animation
 import matplotlib.pyplot
 import cartopy.feature
+import cartopy.crs
 
 def scalar_field(
     XY,
@@ -61,15 +62,14 @@ def vector_field(
     proj=None,
     extent=None,
     frame=0,
-    gif=False
+    gif=False, 
+    scale = 2e-4
 ):
 
     XY_np = XY.numpy()
     UV_np = UV.detach().numpy()
     xs, ys = XY_np[:, 0], XY_np[:, 1]
     N = UV_np.shape[0]
-
-    scale = 2e-4
 
     fig = matplotlib.pyplot.figure()
     if proj:
@@ -79,10 +79,19 @@ def vector_field(
         ax.add_feature(cartopy.feature.COASTLINE.with_scale("50m"))
         ax.add_feature(cartopy.feature.STATES.with_scale("50m"))
         transform = proj
+        ax.gridlines(draw_labels=True)
+
     else:
         ax = fig.add_subplot(1, 1, 1)
         ax.set_aspect("equal")
         transform = None
+
+    lon_pt, lat_pt = -83.6, 30.3
+    ax.plot(
+        lon_pt, lat_pt,
+        marker="x", color="blue", markersize=15,
+        transform=cartopy.crs.PlateCarree()        
+    )
 
     if gif:
         Q = ax.quiver(

@@ -1,45 +1,25 @@
 class ScaleT:
-    def __init__(
-        self, 
-        T
-    ):
-        self.scale = T.max()
-        
-    def __call__(
-        self,
-        t
-    ):
-        return t / self.scale.to(t.device)
-
+    def __init__(self, T):
+        self.min   = T.min()
+        self.range = (T.max() - self.min)      # ← use max–min
+    def __call__(self, t):
+        return (t.to(t.device) - self.min.to(t.device)) \
+               / self.range.to(t.device)
+               
 class ScaleXY:
-    def __init__(
-        self,
-        XY
-    ):  
-        xy_min = XY.min(dim=0).values        
-        xy_max = XY.max(dim=0).values        
-        self.center = (xy_min + xy_max) / 2  
-        half_ranges = (xy_max - xy_min) / 2  
-        self.scale = half_ranges.max()
+    def __init__(self, XY):
+        self.center = XY.mean(dim=0)                 
+        self.scale  = XY.std(dim=0, unbiased=False)
 
-    def __call__(
-        self, 
-        xy
-    ):
+    def __call__(self, xy):
         return (xy - self.center.to(xy.device)) / self.scale.to(xy.device)
 
 class DeScaleA:
-    def __init__(
-        self, 
-        scaleXY
-    ):
+    def __init__(self, scaleXY):
         self.center = scaleXY.center
-        self.scale = scaleXY.scale
+        self.scale  = scaleXY.scale
 
-    def __call__(
-        self, 
-        a
-    ):
+    def __call__(self, a):
         return a * self.scale.to(a.device) + self.center.to(a.device)
 
 class ScaleZ:
@@ -47,9 +27,9 @@ class ScaleZ:
         self,
         Z
     ):
-        flat = Z[0, :]
+        flat = Z.reshape(-1)
         self.mean = flat.mean()
-        self.scale = flat.std()
+        self.scale = flat.std(unbiased=False)
 
     def __call__(
         self,
