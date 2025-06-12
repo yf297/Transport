@@ -1,26 +1,21 @@
-class ScaleT:
-    def __init__(self, T):
-        self.min   = T.min()
-        self.range = (T.max() - self.min)      # ← use max–min
-    def __call__(self, t):
-        return (t.to(t.device) - self.min.to(t.device)) \
-               / self.range.to(t.device)
-               
-class ScaleXY:
-    def __init__(self, XY):
-        self.center = XY.mean(dim=0)                 
-        self.scale  = XY.std(dim=0, unbiased=False)
+class Scale:
+    def __init__(self, T, XY):
+        self.T_min = T.min()
+        self.T_max = T.max()
+        self.T_scale = self.T_max - self.T_min
+        
+        self.XY_center = XY.mean(dim=0)
+        self.XY_scale  = XY.std(dim=0, unbiased=False)
 
-    def __call__(self, xy):
-        return (xy - self.center.to(xy.device)) / self.scale.to(xy.device)
+    def t(self, t):
+        return (t - self.T_min) / self.T_scale.to(t.device)
 
-class DeScaleA:
-    def __init__(self, scaleXY):
-        self.center = scaleXY.center
-        self.scale  = scaleXY.scale
+    def xy(self, xy):
+        return (xy - self.XY_center.to(xy.device)) / self.XY_scale.to(xy.device)
+    
+    def a(self, a):
+        return a * self.XY_scale.to(a.device) + self.XY_center.to(a.device)
 
-    def __call__(self, a):
-        return a * self.scale.to(a.device) + self.center.to(a.device)
 
 class ScaleZ:
     def __init__(
@@ -37,26 +32,3 @@ class ScaleZ:
     ):
         return (z -  self.mean.to(z.device)) / self.scale.to(z.device)
 
-class DeScaleFlow:
-    def __init__(
-        self,
-        scaled_flow,
-        scale_T,
-        scale_XY,
-        descale_A
-    ):
-        self.scale_T = scale_T
-        self.scale_XY = scale_XY
-        self.descale_A = descale_A
-        self.scaled_flow = scaled_flow
-
-    def __call__(
-        self,
-        T, 
-        XY
-    ):
-        scaled_t = self.scale_T(T)
-        scaled_XY = self.scale_XY(XY)
-        scaled_A = self.scaled_flow(scaled_t, scaled_XY)
-        A = self.descale_A(scaled_A)
-        return A

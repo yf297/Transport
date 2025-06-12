@@ -1,86 +1,89 @@
 import gpytorch
 import torch
 import torch.nn.functional as F
-import random
+from torch.optim.lr_scheduler import OneCycleLR
+import math
 
-def mle(
-    T,
-    XY, 
-    Z,
-    gp,
-    flow,
-    epochs,
-    size
-):
+
+def mse(TXY, UV, velocity, batch_size, epochs):
     
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    gp.to(device)
-    flow.to(device)
-    print("moved to gpu")
+    total_iters = math.ceil(TXY.size(0) / batch_size) * epochs
     
+    mse_loss = torch.nn.MSELoss()
+    optim_vel = torch.optim.Adam([{"params": velocity.parameters(), "lr": 0.001}])
+    
+    velocity.to(device)
+    velocity.train()
+    
+    for iter in range(1, total_iters + 1):
+        optim_vel.zero_grad()
+
+        idx = torch.randperm(TXY.size(0))[:batch_size]
+        TXY_sub = TXY[idx,:].to(device)
+        input = velocity(TXY_sub)
+        target = UV[idx,:].to(device)
+        loss = mse_loss(input, target) 
+        loss.backward()
+        optim_vel.step()
+        
+        if iter % 1 == 0:  
+            print(f"Iter {iter}/{total_iters} — loss: {loss.item():.4f}")
+    
+    velocity.eval()
+    velocity.to("cpu")
+
+
+
+def mle(TXY, Z, gp, batch_size, epochs):
+    
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    total_iters = math.ceil(TXY.size(0) / batch_size) * epochs
     mll = gpytorch.mlls.ExactMarginalLogLikelihood(gp.likelihood, gp)
+    
+    optim_vel = torch.optim.AdamW([
+        {"params": gp.flow.velocity.parameters(), "lr":0.01}
+        ])
     optim_gp = torch.optim.Adam([
-        {"params": gp.mean_module.parameters(),  "lr": 0.1},
-        {"params": gp.covar_module.parameters(), "lr": 0.1},
-        {"params": gp.likelihood.parameters(),   "lr": 0.1}
+        {"params": gp.mean.parameters(), "lr": 0.01},
+        {"params": gp.kernel.kernel.parameters(), "lr": 0.01},
+        {"params": gp.likelihood.parameters(), "lr": 0.01}
     ])
-    
-    optim_flow = torch.optim.Adam([
-         {"params": flow.warp.parameters(),  "lr": 0.01}
-    ])
-    
+
+    gp.to(device)
     gp.train()
-    gp.likelihood.train()
-    flow.train()
     
-    
-    print("sampling from", XY.size(0), "points")
     with gpytorch.settings.fast_computations(log_prob=False,
                                              covar_root_decomposition=False,
                                              solves=False):
-        for epoch in range(1, epochs + 1):
+        for iter in range(1, total_iters + 1):
             optim_gp.zero_grad()
-            optim_flow.zero_grad()
+            optim_vel.zero_grad()
             
-            idx = torch.randperm(XY.size(0))[:size]
-            
-            T_train = T.to(device)
-            XY_train = XY[idx,:].to(device)
-            Z_train = Z[:,idx].reshape(-1).to(device)
-            A_train = flow(T_train, XY_train)
-            TA_train = torch.cat([T_train.repeat_interleave(XY_train.size(0)).unsqueeze(1), 
-                                  A_train], dim = -1)
+            idx, _ = torch.sort(torch.randperm(TXY.size(0))[:batch_size])
+            TXY_sub = TXY[idx,:].to(device)
+            Z_sub = Z[idx].to(device)
 
-            gp.set_train_data(inputs=TA_train, targets=Z_train, strict=False)
+            gp.set_train_data(inputs=TXY_sub, targets=Z_sub, strict=False)
+            output = gp(TXY_sub)
+            ll = -mll(output, Z_sub)
 
-            output = gp(TA_train)
-            ll = -mll(output, Z_train)
-            loss = ll 
-            
+            loss = ll
             loss.backward()
-            optim_flow.step()
+            
+            optim_vel.step()
             optim_gp.step()
-            with torch.no_grad():
-                flow.project_all_weight_norms()
-            del T_train, XY_train, Z_train
-            torch.cuda.empty_cache()
-
-            if epoch % 1 == 0:
-                flow.check_weight_norm_products()
-                ls = gp.covar_module.base_kernel.lengthscale.view(-1).tolist()
-                ls_str = ", ".join(f"{v:.2f}" for v in ls)
+        
+            if iter % 1 == 0:
                 noise_var = gp.likelihood.noise_covar.noise.item()
-                outputscale = gp.covar_module.outputscale.item()
+
                 print(
-                    f"Epoch {epoch}/{epochs} — "
-                    f"Avg likelihood: {ll.item():.4f} — "
-                    f"outputscale: {outputscale:.4f} — "
-                    f"lengthscales: {ls_str} — "
+                    f"Iter {iter}/{total_iters} — "
+                    f"Likelihood: {ll.item():.4f} — "
                     f"noise_var: {noise_var:.4f}"
                 )
+    
 
     gp.eval()
     gp.likelihood.eval()
-    flow.eval()
-    flow.to("cpu")
     gp.to("cpu")

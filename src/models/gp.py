@@ -6,30 +6,36 @@ import gpytorch.means
 import gpytorch.kernels
 import gpytorch.distributions
 
-class GP(gpytorch.models.ExactGP):
-    def __init__(self):
-        likelihood = gpytorch.likelihoods.GaussianLikelihood()
-        likelihood.noise_covar.initialize(noise=0.1)
-        super().__init__(None, None, likelihood)
-        self.mean_module = gpytorch.means.ZeroMean()  
-        
-        ls_init = torch.tensor([2,0.5,0.5])
-        lower = (ls_init * 0.25).clamp(min=1e-4)
-        upper = (ls_init * 4)
-
-        lengthscale_constraint = gpytorch.constraints.Interval(lower_bound=lower,
-                                                               upper_bound=upper)
-
-        self.covar_module = gpytorch.kernels.ScaleKernel(
+class TransportKernel(gpytorch.kernels.Kernel):
+    def __init__(self, flow):
+        super().__init__()
+        self.kernel = gpytorch.kernels.ScaleKernel(
             gpytorch.kernels.keops.MaternKernel(
             nu=2.5,
-            ard_num_dims=3,
-            lengthscale_constraint=lengthscale_constraint
+            ard_num_dims=3
         ))
-        #self.covar_module.base_kernel.raw_lengthscale.requires_grad_(False)
+        self.kernel.base_kernel.lengthscale = torch.tensor([2.0, 0.3, 0.3]) 
+        self.kernel.outputscale = torch.tensor(1.0)
+        self.flow = flow
+    
 
+    def forward(self, TXY1, TXY2, **kwargs):
+        TA1 = self.flow(TXY1)
+        TA2 = self.flow(TXY2)
+        return self.kernel(TA1, TA2) 
+    
+    
+class TransportGP(gpytorch.models.ExactGP):
+    def __init__(self, flow):
+        likelihood = gpytorch.likelihoods.GaussianLikelihood()
+        likelihood.noise = torch.tensor(0.1)
+        super().__init__(None, None, likelihood)
 
-    def forward(self, TA):
-        mean_x  = self.mean_module(TA)
-        covar_x = self.covar_module(TA)
-        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
+        self.flow = flow
+        self.mean = gpytorch.means.ConstantMean()
+        self.kernel = TransportKernel(self.flow)
+
+    def forward(self, TXY):
+        mean = self.mean(TXY)
+        kernel = self.kernel(TXY)
+        return gpytorch.distributions.MultivariateNormal(mean, kernel)

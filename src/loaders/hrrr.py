@@ -3,10 +3,7 @@ import cartopy
 import pathlib
 import xarray as xr
 import herbie
-import fields.coord_field
-import fields.scalar_field
-import fields.vector_field
-from typing import Tuple
+import fields.discrete
 
 PlateCarree = cartopy.crs.PlateCarree()
 Lambert = cartopy.crs.LambertConformal(central_longitude=262.5, central_latitude=38.5,
@@ -14,103 +11,80 @@ Lambert = cartopy.crs.LambertConformal(central_longitude=262.5, central_latitude
                                 globe=cartopy.crs.Globe(semimajor_axis=6371229, 
                                                  semiminor_axis=6371229))
 
-def _download_paths(date: str, 
-                    hours: int, 
-                    level: int
-) -> list[pathlib.Path]:
-    paths: list[pathlib.Path] = []
-    for fxx in range(hours + 1):
-        p = herbie.Herbie(date, model="hrrr", fxx=fxx).download(f"{level} mb")
-        paths.append(pathlib.Path(p))
-    return paths
-
-def _open_and_tag(ds:xr.Dataset, 
-    i: int
-) -> xr.Dataset:
-    return ds.expand_dims(time=[i])
-
-def _concat_datasets(
-    paths: list[pathlib.Path]
-) -> xr.Dataset:
-    parts: list[xr.Dataset] = []
-    for i, p in enumerate(paths):
-        ds = xr.open_dataset(p, engine="cfgrib")
-        parts.append(_open_and_tag(ds, i))
-    ds = xr.concat(parts, dim="time")
-    ds = ds.assign_coords(longitude=(ds.longitude - 360))
-    ds = ds.isel(y=slice(None, None, -1))
-    return ds
-
-def _subset_dataset(
-    ds: xr.Dataset,
-    extent: Tuple[float, float, float, float]
-) -> Tuple[xr.Dataset, Tuple[float, float, float, float]]:
-    lon = ds.longitude.values
-    lat = ds.latitude.values
-    points = Lambert.transform_points(PlateCarree, lon, lat)
-    locations = points[:, :, :2]
-    ds = ds.assign_coords(x=("x", locations[0, :, 0]))
-    ds = ds.assign_coords(y=("y", locations[:, 0, 1]))
-    xmin, xmax, ymin, ymax = extent
-    r = Lambert.transform_point(xmax, ymax, PlateCarree)[0]
-    l = Lambert.transform_point(xmin, ymax, PlateCarree)[0]
-    u = Lambert.transform_point(xmax, ymax, PlateCarree)[1]
-    d = Lambert.transform_point(xmin, ymin, PlateCarree)[1]
-    ds = ds.sel(x=slice(l, r), y=slice(u, d))
-    return ds, (l, r, d, u)
 
 
-def _compute_locations(
-    ds: xr.Dataset
-) -> torch.Tensor:
-    x = torch.tensor(ds.x.values, dtype=torch.float32)
-    y = torch.tensor(ds.y.values, dtype=torch.float32)
-    X,Y = torch.meshgrid(x,y,indexing='xy')
-    return torch.stack([X,Y], dim = -1).reshape(-1,2)
+class Data:
+    def __init__(self, date, hours, level):
+        self.date = date
+        self.hours = hours
+        self.level = level
+        self.ds = self._download_and_open()
 
-def _compute_scalar(
-    ds: xr.Dataset
-) -> torch.Tensor:
-    n = ds.dpt.shape[0]
-    return torch.tensor(ds.dpt.values.copy(), dtype=torch.float32).reshape(n, -1)
+    def _download_and_open(self):
+        paths = []
+        for fxx in range(self.hours + 1):
+            p = herbie.Herbie(self.date, model="hrrr", fxx=fxx).download(f"{self.level} mb")
+            paths.append(pathlib.Path(p))
+        parts = []
+        for i, p in enumerate(paths):
+            ds = xr.open_dataset(p, engine="cfgrib")
+            ds = ds.expand_dims(time=[i])
+            parts.append(ds)
+        ds = xr.concat(parts, dim="time")
+        ds = ds.assign_coords(longitude=(ds.longitude - 360))
+        ds = ds.isel(y=slice(None, None, -1))
+        return ds
 
-def _compute_vector(ds: xr.Dataset) -> torch.Tensor:
-    n = ds.u.shape[0]
-    u = torch.tensor(ds.u.values.copy(), dtype=torch.float32).reshape(n, -1)
-    v = torch.tensor(ds.v.values.copy(), dtype=torch.float32).reshape(n, -1)
-    return torch.stack([u, v], dim=-1)
+    def _subset(self, extent):
+        ds = self.ds
+        lon = ds.longitude.values
+        lat = ds.latitude.values
+        points = Lambert.transform_points(PlateCarree, lon, lat)
+        locations = points[:, :, :2]
+        ds = ds.assign_coords(x=("x", locations[0, :, 0]))
+        ds = ds.assign_coords(y=("y", locations[:, 0, 1]))
+        xmin, xmax, ymin, ymax = extent
+        r = Lambert.transform_point(xmax, ymax, PlateCarree)[0]
+        l = Lambert.transform_point(xmin, ymax, PlateCarree)[0]
+        u = Lambert.transform_point(xmax, ymax, PlateCarree)[1]
+        d = Lambert.transform_point(xmin, ymin, PlateCarree)[1]
+        ds = ds.sel(x=slice(l, r), y=slice(u, d))
+        return ds, (l, r, d, u)
 
+    def _compute_locations(self, ds):
+        x = torch.tensor(ds.x.values, dtype=torch.float32)
+        y = torch.tensor(ds.y.values, dtype=torch.float32)
+        X, Y = torch.meshgrid(x, y, indexing='xy')
+        return torch.stack([X, Y], dim=-1).reshape(-1, 2)
 
-def discrete_scalar_field(
-    date: str,
-    hours: int,
-    level: int,
-    extent: Tuple[float, float, float, float]
-) -> fields.scalar_field.DiscreteScalarField:
-    paths = _download_paths(date, hours, level)
-    ds = _concat_datasets(paths)
-    ds, extent = _subset_dataset(ds, extent)
-    grid = ds.dpt.shape[1:]
-    T = torch.linspace(0, hours * 3600, hours + 1)
-    XY = _compute_locations(ds)
-    dcf = fields.coord_field.DiscreteCoordField(T, XY, Lambert, extent, grid)
-    Z = _compute_scalar(ds)
-    dsf = fields.scalar_field.DiscreteScalarField(dcf, Z)
-    return dsf
+    def _compute_scalar(self, ds):
+        return torch.tensor(ds.dpt.values.copy(), dtype=torch.float32).reshape(-1) 
 
-def discrete_vector_field(
-    date: str,
-    hours: int,
-    level: int,
-    extent: Tuple[float, float, float, float]
-) -> fields.vector_field.DiscreteVectorField:
-    paths = _download_paths(date, hours, level)
-    ds = _concat_datasets(paths)
-    ds, extent = _subset_dataset(ds, extent)
-    grid = ds.dpt.shape[1:]
-    T = torch.linspace(0, hours * 3600, hours + 1)
-    XY = _compute_locations(ds)
-    dcf = fields.coord_field.DiscreteCoordField(T, XY, Lambert, extent, grid)
-    UV = _compute_vector(ds)
-    dsf = fields.vector_field.DiscreteVectorField(dcf, UV)
-    return dsf
+    def _compute_vector(self, ds):
+        u = torch.tensor(ds.u.values.copy(), dtype=torch.float32).view(-1,1)
+        v = torch.tensor(ds.v.values.copy(), dtype=torch.float32).view(-1,1)
+        return torch.cat([u, v], dim=-1)
+
+    def scalar_field(self, extent):
+        ds, extent2 = self._subset(extent)
+        grid = ds.dpt.shape
+        T = torch.linspace(0, self.hours * 3600, self.hours + 1)
+        T = T.unsqueeze(1)
+        XY = self._compute_locations(ds)
+        TXY = torch.cat([T.repeat_interleave(XY.size(0)).unsqueeze(-1), 
+                         XY.repeat(T.size(0), 1)], dim=-1)
+        dcf = fields.discrete.CoordField(TXY, Lambert, extent2, grid)
+        Z = self._compute_scalar(ds)
+        return fields.discrete.ScalarField(dcf, Z)
+
+    def vector_field(self, extent):
+        ds, extent2 = self._subset(extent)
+        grid = ds.dpt.shape
+        T = torch.linspace(0, self.hours * 3600, self.hours + 1)
+        T = T.unsqueeze(1)
+        XY = self._compute_locations(ds)
+        TXY = torch.cat([T.repeat_interleave(XY.size(0)).unsqueeze(-1), 
+                         XY.repeat(T.size(0), 1)], dim=-1)
+        dcf = fields.discrete.CoordField(TXY, Lambert, extent2, grid)
+        UV = self._compute_vector(ds)
+        return fields.discrete.VectorField(dcf, UV)
