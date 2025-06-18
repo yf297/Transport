@@ -2,17 +2,39 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchdiffeq import odeint
+import torchsde
+from torch.nn import init
 
 class Block(nn.Module):
     def __init__(self, width):
         super().__init__()
         self.W = nn.Linear(width, width)
         self.V = nn.Linear(width, width)
+
+
     def forward(self, h):
-        return self.V(F.relu(self.W(h)))
+        return F.relu(h  + self.V(F.tanh(self.W(h))))
 
 class Velocity(nn.Module):
     def __init__(self, width=32, depth=4):
+        super().__init__()
+        self.W = nn.Linear(2, width, bias=False)
+        self.b = nn.Linear(1, width)
+        self.blocks = nn.ModuleList([Block(width) for _ in range(depth)])
+        self.V = nn.Linear(width, 2)
+
+
+    def forward(self, TXY):
+        T = TXY[..., 0:1]
+        XY = TXY[..., 1:3]
+        h = F.relu(self.W(XY) + self.b(T))
+        for block in self.blocks:
+            h = block(h)
+        return self.V(h)
+
+    
+class NeuralFlow(nn.Module):
+    def __init__(self, width=32, depth=2):
         super().__init__()
         self.W = nn.Linear(2, width, bias=False)
         self.b = nn.Linear(1, width)
@@ -25,43 +47,62 @@ class Velocity(nn.Module):
         h = F.relu(self.W(XY) + self.b(T))
         for block in self.blocks:
             h = block(h)
-        return self.V(h)
+        A = XY + self.V(h)
+        TA = torch.cat([T, A], dim=-1)
+        return TA
     
-
-class ODE(nn.Module):
-    def __init__(self, velocity, method='euler', step_size=1/9):
-        super().__init__() 
-        self.velocity = velocity
+class ODEFlow(nn.Module):
+    def __init__(self, velocity, method='euler', dt=1/6):
+        super().__init__()
         self.method = method
-        self.step_size = step_size
-        
+        self.dt = dt
+        self.velocity = velocity
+
     def func(self, t, XY):
         tXY = torch.cat([t.repeat(XY.size(0),1), XY], dim=-1)
         return self.velocity(tXY)
-
+    
     def flow_instant(self, t, XY):
-        t0 = torch.zeros(1, device=t.device) 
+        t0 = torch.zeros(1, device=t.device)
         t_array = torch.cat([t.unsqueeze(0), t0], dim = -1)
         if torch.allclose(t, t0):
             A = XY
         else:
-            A = odeint(self.func, XY, t_array, method=self.method)[-1]
-        tA = torch.cat([t.repeat(A.size(0),1), A], dim=-1)
-        return tA
+            A = odeint(self.func, XY, t_array, method=self.method, options={"step_size":self.dt})[-1]
+        return A
 
-    def __call__(self, TXY):
-        T = torch.unique(TXY[:, 0:1])
-        idx = [torch.nonzero(TXY[:,0] == t_i, as_tuple=False).squeeze(1) for t_i in T]
-        XY = TXY[..., 1:3]
-        TA = torch.cat([self.flow_instant(T[i], XY[idx[i],:]) for i in range(T.size(0))], dim = 0)
+    def forward(self, TXY):
+        squeeze = False
+        if TXY.dim() == 2:
+            squeeze = True
+            TXY = TXY.unsqueeze(0)
+
+        XY = TXY[..., 1:]
+        TA = TXY.clone()  
+
+        for i in range(TXY.shape[0]):
+            t_all = TXY[i, :, 0]  
+            t_unique = torch.unique(t_all.detach())  
+
+            for t in t_unique:
+                idx = torch.nonzero(t_all == t, as_tuple=True)[0]  
+                result = self.flow_instant(t_all[idx][0], XY[i, idx, :])
+                TA[i, idx, 1:] = result
+
+        if squeeze:
+            TA = TA.squeeze(0)
         return TA
+
 
     
 class Flow(nn.Module):
-    def __init__(self, velocity):
+    def __init__(self, velocity=None):
         super().__init__()
-        self.velocity = velocity
-        self.flow = ODE(self.velocity)
+        if velocity is None:
+            self.velocity = Velocity()
+            self.flow = NeuralFlow()
+        else:
+            self.velocity = velocity
+            self.flow = ODEFlow(velocity)
     def forward(self, TXY):
-        TA = self.flow(TXY)
-        return TA
+        return self.flow(TXY)

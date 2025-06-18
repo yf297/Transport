@@ -48,7 +48,7 @@ class Data:
         l = Lambert.transform_point(xmin, ymax, PlateCarree)[0]
         u = Lambert.transform_point(xmax, ymax, PlateCarree)[1]
         d = Lambert.transform_point(xmin, ymin, PlateCarree)[1]
-        ds = ds.sel(x=slice(l, r), y=slice(u, d))
+        ds = ds.sel(x=slice(l, r, 4), y=slice(u, d, 4))
         return ds, (l, r, d, u)
 
     def _compute_locations(self, ds):

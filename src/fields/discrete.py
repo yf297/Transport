@@ -16,8 +16,8 @@ class CoordField:
         return self.TXY[:,0:1].min()
     
     @property
-    def T_std(self):
-        return self.TXY[:,0:1].std(unbiased=False)
+    def T_max(self):
+        return self.TXY[:,0:1].max() 
 
     @property
     def XY_center(self):
@@ -25,11 +25,11 @@ class CoordField:
     
     @property
     def XY_std(self):
-        return self.TXY[:,1:3].std(dim=0, unbiased=False)
+        return self.TXY[:,1:3].std(dim=0, unbiased=False) 
 
     @property
     def T_scaled(self):
-        return (self.TXY[:,0:1] - self.T_min) / self.T_std
+        return (self.TXY[:,0:1] - self.T_min) / self.T_max
 
     @property
     def XY_scaled(self):
@@ -40,22 +40,6 @@ class CoordField:
         TXY_scaled = torch.cat([self.T_scaled, self.XY_scaled], dim=-1)
         return TXY_scaled
 
-    def coarsen(self,factor=1):
-        if self.grid is None:
-            raise ValueError("coord_field.grid must not be None when using factor.")
-        else:
-            T = self.TXY[:,0:1]
-            XY = self.TXY[:, 1:3]
-            n, k1, k2 = self.grid
-            fac = max(1, factor)
-            
-            T = T.reshape(n, k1, k2)[:, ::fac, ::fac]
-            XY = XY.reshape(n, k1, k2, 2)[:, ::fac, ::fac, :]            
-            self.grid = XY.shape[:3]
-            
-            T = T.reshape(-1, 1)
-            XY = XY.reshape(-1, 2)
-            self.TXY = torch.cat([T, XY], dim=-1)
 
 class ScalarField:
     def __init__(self, coord_field, Z=None):
@@ -74,29 +58,26 @@ class ScalarField:
     def Z_scaled(self):
         return (self.Z - self.Z_mean) / self.Z_std
     
-    def simulate(self, flow):
+    def simulate(self, flow = None):
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         gp = models.gp.TransportGP(flow)
-        gp.eval()
         gp.to(device)
+        gp.eval()
         TXY_scaled = self.coord_field.TXY_scaled.to(device)
-        with gpytorch.settings.prior_mode(True):
-            self.Z = gp.likelihood(gp(TXY_scaled)).sample()
+            
+        with gpytorch.settings.fast_computations(log_prob=False,
+                                            covar_root_decomposition=False,
+                                            solves=False):
+            with gpytorch.settings.prior_mode(True):
+                Z = gp(TXY_scaled).sample()
+        gp.to("cpu")
+        return Z.to("cpu")
+
         
-        self.Z = self.Z.to("cpu")
-        del gp
-        
-    def coarsen(self, factor=1):
-        if self.coord_field.grid is None:
-            raise ValueError("coord_field.grid must not be None when using factor.")
-        else:
-            n, k1, k2 = self.coord_field.grid
-            fac = max(1, factor)            
-            self.Z = self.Z.reshape(n, k1, k2)[:, ::fac, ::fac].reshape(-1)
-            self.coord_field.coarsen(factor)
+    
             
     def plot(self):
-        return utils.plot.scalar_field(self.coord_field.TXY, self.Z, self.coord_field.proj, extent=self.coord_field.extent)
+        return utils.plot.scalar_field(self.coord_field.TXY, self.Z_scaled, self.coord_field.proj, extent=self.coord_field.extent)
 
 
 
@@ -113,18 +94,22 @@ class VectorField:
     
     @property
     def UV_scaled(self):
-        return (self.coord_field.T_std / self.coord_field.XY_std) * self.UV
+        return (self.coord_field.T_max / self.coord_field.XY_std) * self.UV
 
-    def coarsen(self, factor):
-        if self.coord_field.grid is None:
-            raise ValueError("coord_field.grid must not be None when using factor.")
-        else:
-            n, k1, k2 = self.coord_field.grid
-            fac = max(1, factor)      
-            self.UV = self.UV.reshape(n, k1, k2, 2)[:, ::fac, ::fac, :].reshape(-1, 2)
-            self.coord_field.coarsen(factor)
-
-    def plot(self):
-        return utils.plot.vector_field(self.coord_field.TXY, self.UV, self.coord_field.proj, extent=self.coord_field.extent)
+    def plot(self, factor = 1):
+        T = self.coord_field.TXY[:,0:1]
+        XY = self.coord_field.TXY[:, 1:3]
+        n, k1, k2 = self.coord_field.grid
+        fac = max(1, factor)
+        
+        T = T.reshape(n, k1, k2)[:, ::fac, ::fac]
+        XY = XY.reshape(n, k1, k2, 2)[:, ::fac, ::fac, :]            
+            
+        T = T.reshape(-1, 1)
+        XY = XY.reshape(-1, 2)
+        TXY = torch.cat([T, XY], dim=-1)
+        UV = self.UV.reshape(n, k1, k2, 2)[:, ::fac, ::fac, :].reshape(-1, 2)
+                
+        return utils.plot.vector_field(TXY, UV, self.coord_field.proj, extent=self.coord_field.extent)
 
 
