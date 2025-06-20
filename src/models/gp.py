@@ -11,11 +11,11 @@ class TransportKernel(gpytorch.kernels.Kernel):
         super().__init__()
         self.kernel = gpytorch.kernels.ScaleKernel(
             gpytorch.kernels.keops.MaternKernel(
-            nu=2.5,
-            ard_num_dims=3
+            nu=0.5,
+            ard_num_dims=3, 
+            active_dims = (0, 1,2)
         ))
-        self.kernel.base_kernel.lengthscale = torch.tensor([2, 0.4, 0.4]) 
-        self.kernel.outputscale = torch.tensor(1.0)
+        self.kernel.base_kernel.lengthscale = torch.tensor([4.0, 0.75, 0.75]) 
         self.flow = flow
     
 
@@ -32,7 +32,7 @@ class TransportGP(gpytorch.models.ExactGP):
     def __init__(self, flow):
         likelihood = gpytorch.likelihoods.GaussianLikelihood()
         super().__init__(None, None, likelihood)
-
+        likelihood.noise = torch.tensor(0.1)
         self.flow = flow
         self.mean = gpytorch.means.ConstantMean()
         self.kernel = TransportKernel(self.flow)

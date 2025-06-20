@@ -17,7 +17,7 @@ def scalar_field(TXY, Z, proj=None, extent=None):
     ax.add_feature(cartopy.feature.STATES.with_scale("50m"))
 
     idx = [torch.nonzero(TXY[:,0] == t_i, as_tuple=False).squeeze(1) for t_i in torch.unique(TXY[:,0])]
-    grid_res = 300
+    grid_res = 100
     x_min, x_max = TXY[:,1].min().item(), TXY[:,1].max().item()
     y_min, y_max = TXY[:,2].min().item(), TXY[:,2].max().item()
     grid_x, grid_y = np.meshgrid(
