@@ -49,9 +49,9 @@ class Data:
         u = geo.transform_point(xmax + 0.5, ymax + 0.5, PlateCarree)[1]
         d = geo.transform_point(xmin - 1, ymin - 0.5, PlateCarree)[1]
         
-        ds = self.scalar_ds.sel(x=slice(l, r, self.factor), y=slice(u, d, self.factor))
+        ds = self.scalar_ds.sel(x=slice(l, r, 6), y=slice(u, d, 6))
         extent = (l, r, d, u)
-        
+
         grid = ds["CMI"].values.shape[1:]
         time_array = ds.t.values
         seconds_since_midnight = (time_array - time_array.astype('datetime64[D]')) / np.timedelta64(1, 's')
@@ -61,12 +61,13 @@ class Data:
         y = torch.tensor(ds.y.values, dtype=torch.float32)
         X, Y = torch.meshgrid(x, y, indexing='xy')
         XY = torch.stack([X, Y], dim=-1).reshape(-1, 2)
-        
+        TXY = torch.cat([T.repeat_interleave(XY.size(0)).unsqueeze(-1), 
+                         XY.repeat(T.size(0), 1)], dim=-1)
         n = ds["CMI"].values.shape[0]
-        Z = torch.tensor(ds["CMI"].values.copy(), dtype=torch.float32).reshape(n, -1) 
+        Z = torch.tensor(ds["CMI"].values.copy(), dtype=torch.float32).reshape(-1) 
 
         geo = ds.metpy.parse_cf('CMI').metpy.cartopy_crs
-        dcf = fields.discrete.CoordField(T, XY, geo, extent, grid)
+        dcf = fields.discrete.CoordField(TXY, geo, extent, grid)
         dsf = fields.discrete.ScalarField(dcf, Z)
         return dsf
 
@@ -102,15 +103,16 @@ class Data:
         x = torch.tensor(ds.lon.values, dtype=torch.float32)
         y = torch.tensor(ds.lat.values, dtype=torch.float32)
         XY = XY = torch.stack([x, y], dim=-1) 
-
+        TXY = torch.cat([T.repeat_interleave(XY.size(0)).unsqueeze(-1), 
+                                XY.repeat(T.size(0), 1)], dim=-1)
         wspd = ds.wind_speed.values
         wdir = ds.wind_direction.values
         wdir = np.deg2rad(wdir)
         uu = torch.tensor(-wspd * np.sin(wdir)).unsqueeze(1)
         vv = torch.tensor(-wspd * np.cos(wdir)).unsqueeze(1)
-        UV = torch.cat([uu, vv], dim=-1).unsqueeze(0)
+        UV = torch.cat([uu, vv], dim=-1)
 
-        dcf = fields.discrete.CoordField(T, XY, pc, extent, None)
+        dcf = fields.discrete.CoordField(TXY, pc, extent, None)
         dvf = fields.discrete.VectorField(dcf, UV)
         return dvf
 

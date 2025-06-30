@@ -25,7 +25,7 @@ class CoordField:
     
     @property
     def XY_scale(self):
-        return 100000.0
+        return self.T_scale * 40
 
     @property
     def TXY_scaled(self):
@@ -52,41 +52,21 @@ class ScalarField:
     def Z_scaled(self):
         return (self.Z - self.Z_mean) / self.Z_scale
     
-    def simulate(self, flow = None, gp = None, prior = False):
+    def simulate(self, flow = None):
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        if prior:        
-            gp = models.gp.TransportGP(flow)
-            gp.likelihood.noise = torch.tensor(0.001)
-            gp.to(device)
-            gp.eval()
-            TXY_scaled = self.coord_field.TXY_scaled.to(device)
-            with gpytorch.settings.fast_computations(log_prob=False,
-                                                covar_root_decomposition=False,
-                                                solves=False):
-                with gpytorch.settings.prior_mode(True):
-                    Z = gp(TXY_scaled).sample()
-            gp.to("cpu")
-            return Z.to("cpu")
-        else:
-            gp.to(device)
-            gp.eval()
-            gp.likelihood.noise = torch.tensor(0.0001)
-            TXY_scaled = self.coord_field.TXY_scaled.to(device)
-            n = torch.unique(TXY_scaled[:, 0]).numel()
-            m = TXY_scaled.shape[0] // n
+        gp = models.gp.TransportGP(flow)
+        gp.likelihood.noise = torch.tensor(0.001)
+        gp.to(device)
+        gp.eval()
+        TXY_scaled = self.coord_field.TXY_scaled.to(device)
+        with gpytorch.settings.fast_computations(log_prob=False,
+                                            covar_root_decomposition=False,
+                                            solves=False):
+            with gpytorch.settings.prior_mode(True):
+                Z = gp(TXY_scaled).sample()
+        gp.to("cpu")
+        return Z.to("cpu")
 
-            TXY0 = torch.cat([TXY_scaled[:m], TXY_scaled[-m:]], dim=0)
-            Z0 = torch.cat([self.Z_scaled[:m], self.Z_scaled[-m:]], dim=0).to(device)
-                    
-            gp.set_train_data(TXY0, Z0, strict=False)
-            with gpytorch.settings.fast_computations(log_prob=False,
-                                                covar_root_decomposition=False,
-                                                solves=False):
-                Z = gp(TXY_scaled).mean
-            gp.to("cpu")
-            return Z.to("cpu").detach()
-
-            
     def plot(self):
         return utils.plot.scalar_field(self.coord_field.TXY, self.Z_scaled, self.coord_field.proj, extent=self.coord_field.extent)
 
@@ -98,9 +78,13 @@ class VectorField:
         
     @property
     def RMS(self):
-        norm_squared = torch.norm(self.UV, p = 2, dim=-1).square()        
-        rms_per_timestep = norm_squared.mean(dim=-1).sqrt()         
-        return rms_per_timestep.mean()
+        n = self.coord_field.grid[0]
+        return self.UV.reshape(n, -1, 2).norm(p = 2, dim=-1).square().mean(dim=-1).sqrt().mean()
+    
+    @property
+    def RMS_scaled(self):
+        n = self.coord_field.grid[0]
+        return self.UV_scaled.reshape(n, -1, 2).norm(p = 2, dim=-1).square().mean(dim=-1).sqrt().mean()
     
     @property
     def UV_scaled(self):
@@ -119,7 +103,5 @@ class VectorField:
         XY = XY.reshape(-1, 2)
         TXY = torch.cat([T, XY], dim=-1)
         UV = self.UV.reshape(n, k1, k2, 2)[:, ::fac, ::fac, :].reshape(-1, 2)
-                
         return utils.plot.vector_field(TXY, UV, self.coord_field.proj, extent=self.coord_field.extent)
-
 
