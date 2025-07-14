@@ -52,7 +52,8 @@ class ScalarField:
     def Z_scaled(self):
         return (self.Z - self.Z_mean) / self.Z_scale
     
-    def simulate(self, flow = None):
+    
+    def simulate_from_prior(self, flow = None):
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         gp = models.gp.TransportGP(flow)
         gp.likelihood.noise = torch.tensor(0.001)

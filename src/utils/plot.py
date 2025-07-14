@@ -25,12 +25,9 @@ def scalar_field(TXY, Z, proj=None, extent=None):
         np.linspace(y_min, y_max, grid_res)
     )
 
-    # Interpolate first frame
     x, y = TXY[idx[0], 1].numpy(), TXY[idx[0], 2].numpy()
     z = Z[idx[0]].numpy()
     grid_z = griddata((x, y), z, (grid_x, grid_y), method='cubic')
-    grad_y, grad_x = np.gradient(grid_z)
-    diffusivity_magnitude = np.sqrt(grad_x**2 + grad_y**2)
     img = ax.imshow(
         grid_z, origin='lower',
         extent=[x_min, x_max, y_min, y_max],

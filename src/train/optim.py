@@ -4,7 +4,7 @@ from torch.utils.data import TensorDataset, DataLoader
 import tqdm
 
 
-def mle(TXY, Z, gp, batch_size, epochs, verbose, cvf, dvf):
+def mle(TXY, Z, gp, batch_size, epochs, cvf, dvf):
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     gp.to(device)
@@ -14,12 +14,13 @@ def mle(TXY, Z, gp, batch_size, epochs, verbose, cvf, dvf):
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True) 
     mll = gpytorch.mlls.ExactMarginalLogLikelihood(gp.likelihood, gp)
 
-    optim_flow = torch.optim.AdamW(gp.flow.parameters(), lr=0.005)
+    optim_flow = torch.optim.AdamW(gp.flow.parameters(), lr=0.003)
     optim_mean = torch.optim.Adam(gp.mean.parameters(), lr=0.1)
     optim_kernel = torch.optim.Adam(gp.kernel.kernel.parameters(), lr=0.1)
     optim_noise = torch.optim.Adam(gp.likelihood.parameters(), lr=0.1)
     
-        
+    scheduler_flow = torch.optim.lr_scheduler.MultiStepLR(optim_flow, milestones=[100], gamma=0.5)
+
     with gpytorch.settings.fast_computations(log_prob=False,
                                              covar_root_decomposition=False,
                                              solves=False):
@@ -48,7 +49,8 @@ def mle(TXY, Z, gp, batch_size, epochs, verbose, cvf, dvf):
                 optim_kernel.step()
                 optim_noise.step()
                 minibatch_iter.set_postfix(loss=loss.item())
-
+            
+            scheduler_flow.step()
             mean = gp.mean.constant.item()
             sigma2 = gp.kernel.kernel.outputscale.item()
             l0 = gp.kernel.kernel.base_kernel.lengthscale[0][0].item()
@@ -56,19 +58,18 @@ def mle(TXY, Z, gp, batch_size, epochs, verbose, cvf, dvf):
             l2 = gp.kernel.kernel.base_kernel.lengthscale[0][2].item()
             tau2 = gp.likelihood.noise.item()
 
-            if verbose:
-                if (epoch+1) % 10 == 0 or epoch == epochs - 1 or epoch == 0:
-                    print(
-                        f"Epoch {epoch+1}/{epochs} — "
-                        f"rmse: {cvf.RMSE(dvf):.4f} - "
-                        f"ll: {avg_ll:.4f} - "
-                        f"mean: {mean:.4f} - "
-                        f"sigma2: {sigma2:.4f} - "
-                        f"tau2: {tau2:.4f} - "
-                        f"l0: {l0:.4f} - "
-                        f"l1: {l1:.4f} - "
-                        f"l2: {l2:.4f}"
-                    )
+            if (epoch+1) % 10 == 0 or epoch == epochs - 1 or epoch == 0:
+                print(
+                    f"Epoch {epoch+1}/{epochs} — "
+                    f"rmse: {cvf.RMSE(dvf):.4f} - "
+                    f"ll: {avg_ll:.4f} - "
+                    f"mean: {mean:.4f} - "
+                    f"sigma2: {sigma2:.4f} - "
+                    f"tau2: {tau2:.4f} - "
+                    f"l0: {l0:.4f} - "
+                    f"l1: {l1:.4f} - "
+                    f"l2: {l2:.4f}"
+                )
 
     gp.eval()
     gp.to("cpu")
